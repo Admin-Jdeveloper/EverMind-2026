@@ -1,0 +1,129 @@
+# ==============================================================================
+# Evermind — .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment Variables & Secrets (NEVER COMMIT)
+# ------------------------------------------------------------------------------
+.env
+.env*
+.env.*
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+.env.local-real
+.env.local-docker
+*.env
+*.env.*
+!.env.example
+credentials.json
+token.json
+*.pem
+*.key
+*.cert
+*.crt
+
+# ------------------------------------------------------------------------------
+# 2. Markdown Files (Only root README.md is tracked)
+# ------------------------------------------------------------------------------
+*.md
+**/*.md
+!/README.md
+
+# ------------------------------------------------------------------------------
+# 3. Antigravity, Skills & Agent Setup Files
+# ------------------------------------------------------------------------------
+SKILLS/
+skills/
+.skills/
+antigravity/
+.antigravity/
+*.antigravity
+setup/
+setup_*.py
+setup_*.sh
+directives/
+execution/
+
+# ------------------------------------------------------------------------------
+# 4. System & IDE Files
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.project
+.settings/
+
+# ------------------------------------------------------------------------------
+# 5. Node.js & Next.js Build Outputs & Dependencies
+# ------------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+build/
+dist/
+.npm/
+.yarn/
+.pnp
+.pnp.js
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------------------
+# 6. Python, Django, Celery & Pytest Artifacts
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+*.egg-info/
+.installed.cfg
+*.egg
+staticfiles/
+media/
+*.sqlite3
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+*.lcov
+.nyc_output
+
+# ------------------------------------------------------------------------------
+# 7. Local Runtime, Docker & Temporary Storage
+# ------------------------------------------------------------------------------
+.tmp/
+docker-data/
+logs/
+*.log
+*.onnx
+apps/api/models/

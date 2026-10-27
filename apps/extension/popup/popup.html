@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediaCompile Web Clipper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo-area">
+      <div class="logo-badge">MC</div>
+      <h2>MediaCompile</h2>
+    </div>
+    <span class="badge">Sovereign Clip</span>
+  </div>
+
+  <form id="clipForm">
+    <div class="form-group">
+      <label for="pageTitle">Page Title</label>
+      <input type="text" id="pageTitle" placeholder="Loading page title..." required>
+    </div>
+
+    <div class="form-group">
+      <label for="pageUrl">Source URL</label>
+      <input type="url" id="pageUrl" placeholder="https://..." readonly required>
+    </div>
+
+    <div class="form-group">
+      <label for="collectionSelect">Target Collection</label>
+      <select id="collectionSelect">
+        <option value="">Unfiled Library</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="pageTags">Tags (comma-separated)</label>
+      <input type="text" id="pageTags" placeholder="e.g. ai, algorithms, reference">
+    </div>
+
+    <div class="form-group">
+      <label for="userNotes">Personal Notes / Excerpt</label>
+      <textarea id="userNotes" rows="3" placeholder="Optional notes or captured highlights..."></textarea>
+    </div>
+
+    <button type="submit" id="submitBtn" class="btn-primary">
+      <span id="btnText">Save to Personal Library</span>
+      <span id="spinner" class="spinner hidden"></span>
+    </button>
+  </form>
+
+  <div id="statusAlert" class="alert hidden"></div>
+
+  <div class="footer">
+    <button id="toggleConfigBtn" class="text-link">Settings & Auth</button>
+  </div>
+
+  <div id="configSection" class="config-panel hidden">
+    <h4>Connection Settings</h4>
+    <div class="form-group">
+      <label for="apiBase">API Base URL</label>
+      <input type="text" id="apiBase" value="http://127.0.0.1:8000">
+    </div>
+    <div class="form-group">
+      <label for="authToken">JWT Token</label>
+      <input type="password" id="authToken" placeholder="Bearer eyJhbGci...">
+    </div>
+    <button id="saveConfigBtn" class="btn-secondary">Save Settings</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

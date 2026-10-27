@@ -1,0 +1,83 @@
+# syntax=docker/dockerfile:1.4
+# ==============================================================================
+# MediaCompile Production API Dockerfile
+# Multi-stage build for Django REST Framework API & Celery Workers
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Stage 1: Dependency Builder
+# ------------------------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS builder
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install wheels
+COPY apps/api/requirements.txt .
+RUN pip install --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /build/wheels "gunicorn>=22.0.0"
+
+# ------------------------------------------------------------------------------
+# Stage 2: Final Production Runtime
+# ------------------------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS runner
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DJANGO_SETTINGS_MODULE=config.settings \
+    PORT=8000 \
+    GUNICORN_WORKERS=4 \
+    GUNICORN_THREADS=2 \
+    GUNICORN_TIMEOUT=120
+
+# Install runtime system packages and curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root application user for least-privilege security
+RUN groupadd -g 10001 appuser && \
+    useradd -u 10001 -g appuser -d /home/appuser -m -s /bin/bash appuser
+
+WORKDIR /app
+
+# Copy and install pre-built wheels from builder stage
+COPY --from=builder /build/wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+# Copy application source code
+COPY --chown=appuser:appuser apps/api /app
+COPY --chown=appuser:appuser deploy/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Create staticfiles directory with write permissions for appuser
+RUN mkdir -p /app/staticfiles && chown -R appuser:appuser /app/staticfiles
+
+# Switch to non-root user
+USER appuser
+
+EXPOSE 8000
+
+# Health check verifies API endpoint responds with HTTP 200
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://127.0.0.1:8000/api/v1/health/ || exit 1
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command launches Gunicorn WSGI server
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]

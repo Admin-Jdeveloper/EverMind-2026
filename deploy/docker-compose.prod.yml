@@ -1,0 +1,301 @@
+# ==============================================================================
+# MediaCompile Production Docker Compose Stack
+# Multi-container production deployment with DMZ isolation, healthchecks & limits
+# ==============================================================================
+
+version: "3.9"
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Reverse Proxy (Nginx with TLS 1.3 Termination)
+  # ----------------------------------------------------------------------------
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: mediacompile-prod-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot_certs:/etc/nginx/ssl:ro
+      - certbot_www:/var/www/certbot:ro
+      - static_volume:/var/www/staticfiles:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - frontend_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.2"
+          memory: 128M
+
+  # ----------------------------------------------------------------------------
+  # 2. Web Frontend (Next.js 16 Application)
+  # ----------------------------------------------------------------------------
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    container_name: mediacompile-prod-web
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - frontend_net
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 3. API Backend (Django REST Framework WSGI / ASGI)
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: mediacompile-prod-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - RUN_MIGRATIONS=true
+      - COLLECT_STATIC=true
+    volumes:
+      - static_volume:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    networks:
+      - backend_net
+      - frontend_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/api/v1/health/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 4. Celery Async Task Worker
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: mediacompile-prod-worker
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery,ingestion,embeddings,maintenance"]
+    env_file:
+      - .env.production
+    environment:
+      - RUN_MIGRATIONS=false
+      - COLLECT_STATIC=false
+    depends_on:
+      api:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 5. Celery Periodic Scheduler (Beat)
+  # ----------------------------------------------------------------------------
+  beat:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: mediacompile-prod-beat
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "beat", "--loglevel=info"]
+    env_file:
+      - .env.production
+    environment:
+      - RUN_MIGRATIONS=false
+      - COLLECT_STATIC=false
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 6. Database (PostgreSQL 16 + pgvector)
+  # ----------------------------------------------------------------------------
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: mediacompile-prod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mediacompile_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-mediacompile_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c maintenance_work_mem=128MB
+      -c work_mem=16MB
+      -c max_connections=150
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+    volumes:
+      - prod_postgres_data:/var/lib/postgresql/data
+      - ../docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "1.0"
+          memory: 1024M
+
+  # ----------------------------------------------------------------------------
+  # 7. Cache & Broker (Redis 7)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: mediacompile-prod-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?Redis password is required}
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - prod_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 8. Object Storage (MinIO S3 / Chainguard)
+  # ----------------------------------------------------------------------------
+  storage:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: mediacompile-prod-storage
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MinIO password is required}
+    volumes:
+      - prod_storage_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+
+# ------------------------------------------------------------------------------
+# Persistent Storage Volumes
+# ------------------------------------------------------------------------------
+volumes:
+  prod_postgres_data:
+    name: mediacompile_prod_postgres_data
+  prod_redis_data:
+    name: mediacompile_prod_redis_data
+  prod_storage_data:
+    name: mediacompile_prod_storage_data
+  static_volume:
+    name: mediacompile_prod_static_volume
+  certbot_certs:
+    name: mediacompile_prod_certbot_certs
+  certbot_www:
+    name: mediacompile_prod_certbot_www
+
+# ------------------------------------------------------------------------------
+# Isolated Networks (DMZ Architecture)
+# ------------------------------------------------------------------------------
+networks:
+  frontend_net:
+    name: mediacompile_prod_frontend_net
+    driver: bridge
+  backend_net:
+    name: mediacompile_prod_backend_net
+    driver: bridge
+    internal: false

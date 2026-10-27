@@ -1,0 +1,165 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500;1,6..72,600&display=swap');
+@import "katex/dist/katex.min.css";
+@import "tailwindcss";
+
+@layer base {
+  :root,
+  .dark {
+    /* Cinematic Dark mode (matching reference): #10100F, #151514, #1B1B19, #F5F2EB, #B8B2A7, #30302D, #D6C2A3 */
+    --background: #10100F;
+    --surface-base: #151514;
+    --surface: #171716;
+    --surface-subtle: #191918;
+    --surface-hover: #222220;
+    --surface-elevated: #1B1B19;
+    --foreground: #F5F2EB;
+    --foreground-muted: #B8B2A7;
+    --muted-foreground: #B8B2A7;
+    --border: #30302D;
+    --border-hover: rgba(255, 255, 255, 0.22);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+
+    --primary: #F5F2EB;
+    --primary-foreground: #10100F;
+
+    --destructive: #e11d48;
+    --destructive-foreground: #ffffff;
+
+    /* Brand Accents */
+    --accent-sand: #D6C2A3;
+    --accent-sand-hover: #E4D5BE;
+    --accent-sand-muted: rgba(214, 194, 163, 0.14);
+    --accent-champagne: #D6C2A3;
+    --accent-primary: #8b5cf6;
+    --accent-primary-hover: #7c3aed;
+    --accent-cyan: #38bdf8;
+    --accent-emerald: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
+
+    --card: #1B1B19;
+    --card-foreground: #F5F2EB;
+    --canvas-grid: rgba(255, 255, 255, 0.035);
+  }
+
+  .light {
+    /* Light mode: Warm Alabaster / Parchment, Elevated Cream, Charcoal, Muted Gray, Sand */
+    --background: #faf8f5;
+    --surface-base: #f4efe8;
+    --surface: #f4efe8;
+    --surface-subtle: #eae3d6;
+    --surface-hover: #ded5c5;
+    --surface-elevated: #ffffff;
+    --foreground: #141518;
+    --foreground-muted: #525866;
+    --muted-foreground: #525866;
+    --border: rgba(20, 21, 24, 0.12);
+    --border-hover: rgba(20, 21, 24, 0.24);
+    --border-subtle: rgba(20, 21, 24, 0.08);
+
+    --primary: #141518;
+    --primary-foreground: #f4efea;
+
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+
+    /* Light Accents */
+    --accent-sand: #96734d;
+    --accent-sand-hover: #7d5e3c;
+    --accent-sand-muted: rgba(150, 115, 77, 0.14);
+    --accent-champagne: #96734d;
+    --accent-primary: #7c3aed;
+    --accent-primary-hover: #6d28d9;
+    --accent-cyan: #0284c7;
+    --accent-emerald: #059669;
+    --accent-amber: #d97706;
+    --accent-rose: #e11d48;
+
+    --card: #ffffff;
+    --card-foreground: #141518;
+    --canvas-grid: rgba(20, 21, 24, 0.04);
+  }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  text-wrap: pretty;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-muted);
+}
+
+/* Obsidian Glass Surface */
+.glass-panel {
+  background: var(--surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+}
+
+.glass-card {
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-1.5px);
+  box-shadow: 0 10px 25px -8px rgba(0, 0, 0, 0.25);
+}
+
+/* Warm Sand Accent Glow */
+.glow-sand {
+  box-shadow: 0 0 25px -4px rgba(212, 195, 179, 0.25);
+}
+
+.glow-subtle {
+  box-shadow: 0 0 30px -5px rgba(0, 0, 0, 0.35);
+}
+
+/* Editorial Typography */
+.font-editorial {
+  font-family: 'Newsreader', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+}
+
+/* Spatial Canvas Grid */
+.canvas-grid-bg {
+  background-image: 
+    linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* 3D Perspective Card Utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}

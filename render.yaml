@@ -16,7 +16,8 @@ services:
     region: oregon
     plan: starter
     buildCommand: "cd apps/api && pip install --upgrade pip && pip install -r requirements.txt && python manage.py collectstatic --noinput"
-    startCommand: "cd apps/api && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 120"
+    preDeployCommand: "cd apps/api && python manage.py migrate --noinput"
+    startCommand: "cd apps/api && python -m gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 120"
     healthCheckPath: /api/v1/health/
     envVars:
       - key: ENVIRONMENT
@@ -81,7 +82,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: "cd apps/api && pip install --upgrade pip && pip install -r requirements.txt"
-    startCommand: "cd apps/api && celery -A config worker --loglevel=info --concurrency=4 -Q celery,ingestion,embeddings,maintenance"
+    startCommand: "cd apps/api && python -m celery -A config worker --loglevel=info --concurrency=4 -Q celery,ingestion,embeddings,maintenance"
     envVars:
       - key: ENVIRONMENT
         value: production

@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from '@/components/theme-provider';
+import { getUserInitial } from '@/lib/avatar';
 
 interface HeaderProps {
   onOpenMobileNav: () => void;
@@ -38,13 +39,7 @@ export function Header({ onOpenMobileNav, onOpenQuickAdd }: HeaderProps) {
   const user = session?.user;
   const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'Guest');
   const displayEmail = user?.email || 'Not signed in';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((part: string) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || displayName.slice(0, 2).toUpperCase() || 'G';
+  const initial = getUserInitial(user?.name, user?.email, 'U');
 
   // Close dropdown on click outside
   React.useEffect(() => {
@@ -149,8 +144,12 @@ export function Header({ onOpenMobileNav, onOpenQuickAdd }: HeaderProps) {
             aria-expanded={isUserMenuOpen}
             className="flex items-center gap-2.5 p-0.5 rounded-full hover:ring-2 hover:ring-[var(--accent-sand)]/40 transition-all cursor-pointer"
           >
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#1b1f2b] to-[#2c3245] dark:from-stone-800 dark:to-stone-700 border border-[var(--border)] flex items-center justify-center text-xs font-semibold text-white shadow-xs">
-              {initials}
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#1b1f2b] to-[#2c3245] dark:from-stone-800 dark:to-stone-700 border border-[var(--border)] flex items-center justify-center text-xs font-semibold text-white shadow-xs overflow-hidden">
+              {user?.image ? (
+                <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                initial
+              )}
             </div>
           </button>
 

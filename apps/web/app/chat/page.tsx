@@ -24,6 +24,7 @@ import { FormattedMarkdown } from '@/components/ui/formatted-markdown';
 import { Modal } from '@/components/ui/modal';
 import { DeleteConfirmationModal } from '@/components/ui/delete-confirmation-modal';
 import { useSession } from 'next-auth/react';
+import { getUserInitial } from '@/lib/avatar';
 
 interface Citation {
   citation_id?: string;
@@ -186,13 +187,7 @@ export default function ChatPage() {
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   const displayName = session?.user?.name || (session?.user?.email ? session.user.email.split('@')[0] : 'You');
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((p: string) => p[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'U';
+  const initial = getUserInitial(session?.user?.name, session?.user?.email, 'U');
 
   // Read URL query
   React.useEffect(() => {
@@ -619,7 +614,7 @@ export default function ChatPage() {
                           <span>&middot;</span>
                           <span className="text-xs">{msg.timestamp}</span>
                           <div className="h-6 w-6 rounded-full bg-[var(--accent-sand)] text-[#141518] flex items-center justify-center text-xs font-bold shrink-0">
-                            {initials}
+                            {initial}
                           </div>
                         </div>
 

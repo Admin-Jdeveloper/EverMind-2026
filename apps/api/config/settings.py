@@ -95,26 +95,43 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Database Configuration (Development Docker pgvector vs External Production PostgreSQL)
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 if DATABASE_URL:
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import urlparse, parse_qs, unquote
     parsed_db = urlparse(DATABASE_URL)
+    db_port = str(parsed_db.port or 5432)
+    db_host = parsed_db.hostname or ''
+    is_pooler = 'pooler.supabase.com' in db_host or db_port in ('6543', '5432')
+    is_transaction_pooler = db_port == '6543'
+
+    # In pooled environments, default CONN_MAX_AGE to 0 so connections return to the pool immediately after each request.
+    default_conn_max_age = '0' if (is_pooler or not IS_PRODUCTION) else '60'
+    conn_max_age = int(os.environ.get('DB_CONN_MAX_AGE', default_conn_max_age))
+
+    db_options = {
+        'connect_timeout': int(os.environ.get('DB_CONNECT_TIMEOUT', '10')),
+    }
+    # Transaction Poolers (e.g. Supabase Supavisor on 6543, PgBouncer) require disabling prepared statements and server-side cursors
+    if is_transaction_pooler:
+        db_options['prepare_threshold'] = None
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': parsed_db.path.lstrip('/'),
-            'USER': parsed_db.username or '',
-            'PASSWORD': parsed_db.password or '',
-            'HOST': parsed_db.hostname or '',
-            'PORT': str(parsed_db.port or 5432),
-            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '600' if IS_PRODUCTION else '0')),
+            'NAME': unquote(parsed_db.path.lstrip('/')),
+            'USER': unquote(parsed_db.username or ''),
+            'PASSWORD': unquote(parsed_db.password or ''),
+            'HOST': db_host,
+            'PORT': db_port,
+            'CONN_MAX_AGE': conn_max_age,
             'CONN_HEALTH_CHECKS': True,
-            'OPTIONS': {},
+            'DISABLE_SERVER_SIDE_CURSORS': is_transaction_pooler,
+            'OPTIONS': db_options,
         }
     }
     # Parse query parameters such as sslmode
     qs = parse_qs(parsed_db.query)
     if 'sslmode' in qs:
         DATABASES['default']['OPTIONS']['sslmode'] = qs['sslmode'][0]
-    elif IS_PRODUCTION:
+    elif IS_PRODUCTION or 'supabase.com' in db_host:
         DATABASES['default']['OPTIONS']['sslmode'] = 'require'
 else:
     DATABASES = {
@@ -125,11 +142,12 @@ else:
             'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'postgres'),
             'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1'),
             'PORT': os.environ.get('POSTGRES_PORT', '5432'),
-            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '600' if IS_PRODUCTION else '0')),
+            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '0')),
             'CONN_HEALTH_CHECKS': True,
             'OPTIONS': {
-                'sslmode': 'require'
-            } if IS_PRODUCTION else {},
+                'connect_timeout': int(os.environ.get('DB_CONNECT_TIMEOUT', '10')),
+                **({'sslmode': 'require'} if IS_PRODUCTION else {})
+            },
         }
     }
 
@@ -185,8 +203,8 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'core.throttling.SafeAnonRateThrottle',
+        'core.throttling.SafeUserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/minute',
@@ -234,23 +252,86 @@ INTERNAL_API_SECRET = os.environ.get(
 INTERNAL_API_ISSUER = os.environ.get('INTERNAL_API_ISSUER', 'evermind-web')
 INTERNAL_API_AUDIENCE = os.environ.get('INTERNAL_API_AUDIENCE', 'evermind-api')
 
-# Redis / Cache Configuration
+# Redis / Cache Configuration (connection capped for managed cloud Redis)
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0'),
+        'TIMEOUT': int(os.environ.get('CACHE_DEFAULT_TIMEOUT', '300')),  # 5-minute bounded TTL prevents permanent key leak
+        'OPTIONS': {
+            'max_connections': 4,
+            'socket_connect_timeout': 5,
+            'socket_timeout': 5,
+            'health_check_interval': 15,  # Active health check PINGs prevent idle disconnects
+        }
     }
 }
 
-# Celery Configuration (runs directly on Windows host with -P solo)
+# Celery Configuration (runs directly on Windows host with -P solo or on Render worker)
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+
+# Resilient Kombu Redis Transport Options
+# Fixes [WinError 10054] connection resets by sending TCP keepalive and periodic health check PINGs
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'health_check_interval': 15,          # Send PING every 15s to keep idle connections alive through NAT/firewalls
+    'socket_timeout': 15.0,               # Bounded socket read/write timeout
+    'socket_connect_timeout': 5.0,        # Bounded socket connect timeout
+    'socket_keepalive': True,             # Enable TCP keepalive (SO_KEEPALIVE)
+    'retry_on_timeout': True,             # Retry operations on socket timeout
+    'visibility_timeout': 43200,          # 12-hour visibility timeout for large PDF / transcript ingestion
+    'max_connections': 6,                 # Bounded connection pool per worker process
+}
+
+# Authoritative ingestion state is persisted in PostgreSQL ContentItem (STATUS_COMPLETED, etc.)
+# Disable result backend by default to avoid retaining unneeded task results and tracebacks in Redis memory.
+_raw_backend = os.environ.get('CELERY_RESULT_BACKEND', '')
+if not _raw_backend or _raw_backend.lower() in ('none', 'false', '0'):
+    CELERY_RESULT_BACKEND = None
+else:
+    if _raw_backend.endswith('/1') and any(cloud in _raw_backend for cloud in ('redis.io', 'upstash.io', 'supabase', 'rediss://')):
+        CELERY_RESULT_BACKEND = _raw_backend[:-2] + '/0'
+    else:
+        CELERY_RESULT_BACKEND = _raw_backend
+
+# If result backend is explicitly configured, enforce strict 5-minute expiration (default is 1 day / 86400s)
+CELERY_RESULT_EXPIRES = int(os.environ.get('CELERY_RESULT_EXPIRES', '300'))
+CELERY_TASK_IGNORE_RESULT = True  # State is persisted authoritatively in PostgreSQL ContentItem
+CELERY_TASK_TRACK_STARTED = False # Avoid persistent Redis pubsub subscriber overhead
+CELERY_WORKER_SEND_TASK_EVENTS = False # Avoid Kombu event queue accumulation in Redis
+CELERY_TASK_SEND_SENT_EVENT = False
+CELERY_EVENT_QUEUE_EXPIRES = 60 # Kombu event queues expire after 60s
+CELERY_BROKER_POOL_LIMIT = 5
+CELERY_REDIS_MAX_CONNECTIONS = 6
+CELERY_RESULT_BACKEND_MAX_CONNECTIONS = 2
+
+# Connection Reconnection & Resilience Settings
+CELERY_BROKER_CONNECTION_RETRY = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 100  # Resilient exponential backoff
+
+# Task Reliability & Idempotency Controls
+CELERY_TASK_ACKS_LATE = True                     # Acknowledge only after task execution completes
+CELERY_TASK_REJECT_ON_WORKER_LOST = True         # Requeue task if worker process dies unexpectedly
+CELERY_WORKER_CANCEL_LONG_RUNNING_TASKS_ON_CONNECTION_LOSS = False  # Allow running task to finish during transient broker resets
+CELERY_TASK_TIME_LIMIT = 600                     # 10 minutes hard execution limit
+CELERY_TASK_SOFT_TIME_LIMIT = 540                # 9 minutes soft execution limit
+CELERY_TASK_DEFAULT_QUEUE = 'celery'
+CELERY_TASK_ROUTES = {
+    'content.tasks.process_document_content': {'queue': 'celery'},
+    'content.tasks.process_url_content': {'queue': 'celery'},
+    'content.tasks.process_note_content': {'queue': 'celery'},
+    'content.tasks.generate_chunk_embeddings': {'queue': 'celery'},
+    'content.tasks.reembed_user_content': {'queue': 'celery'},
+    'integrations.tasks.*': {'queue': 'celery'},
+}
+CELERY_IMPORTS = (
+    'content.tasks',
+    'integrations.tasks',
+)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 300  # 5 minutes maximum for ingestion tasks
 
 # Storage Provider Configuration (AWS S3 vs MinIO)
 STORAGE_PROVIDER = os.environ.get(

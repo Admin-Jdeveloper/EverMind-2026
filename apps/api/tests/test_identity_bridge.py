@@ -9,13 +9,14 @@ from rest_framework import status
 User = get_user_model()
 
 def generate_test_token(sub="authjs_sub_12345", email="testuser@mediacompile.io", name="Test User",
-                        secret=None, issuer=None, audience=None, exp_delta=60):
+                        secret=None, issuer=None, audience=None, exp_delta=60, image=None):
     """Helper to generate JWT tokens for Identity Bridge testing."""
     now = int(time.time())
     payload = {
         "sub": sub,
         "email": email,
         "name": name,
+        "image": image or "",
         "iss": issuer if issuer is not None else settings.INTERNAL_API_ISSUER,
         "aud": audience if audience is not None else settings.INTERNAL_API_AUDIENCE,
         "iat": now,
@@ -122,3 +123,74 @@ def test_disabled_user_rejected():
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     response = client.get("/api/v1/users/me/")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+def test_google_oauth_data_sync_and_resource_isolation():
+    """Verify Google OAuth user profile syncs avatar/name and uniquely isolates chats and items."""
+    from chat.models import ChatSession
+    from content.models import ContentItem
+
+    client = APIClient()
+    google_avatar = "https://lh3.googleusercontent.com/a/ACg8ocL_test_avatar_url"
+    google_token = generate_test_token(
+        sub="google_oauth_1092837465",
+        email="alex.google@example.com",
+        name="Alex GoogleUser",
+        image=google_avatar
+    )
+
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {google_token}")
+    me_res = client.get("/api/v1/users/me/")
+    assert me_res.status_code == status.HTTP_200_OK
+    assert me_res.data["data"]["email"] == "alex.google@example.com"
+    assert me_res.data["data"]["authjs_id"] == "google_oauth_1092837465"
+    assert me_res.data["data"]["image"] == google_avatar
+    assert me_res.data["data"]["name"] == "Alex GoogleUser"
+
+    google_user = User.objects.get(email="alex.google@example.com")
+    assert google_user.image == google_avatar
+    assert google_user.email_verified is True
+
+    # Create a chat session and a content item for this Google user
+    session = ChatSession.objects.create(user=google_user, title="Alex Private Google Chat")
+    item = ContentItem.objects.create(user=google_user, title="Alex Private Google Doc", content_type="document")
+
+    # Verify Google user can access their own session and items
+    sessions_res = client.get("/api/v1/chat/sessions/")
+    assert sessions_res.status_code == status.HTTP_200_OK
+    raw_sessions = sessions_res.data.get("results", sessions_res.data if isinstance(sessions_res.data, list) else [])
+    session_ids = [str(s["id"]) for s in raw_sessions]
+    assert str(session.id) in session_ids
+
+    items_res = client.get("/api/v1/content/items/")
+    assert items_res.status_code == status.HTTP_200_OK
+    raw_items = items_res.data.get("results", items_res.data if isinstance(items_res.data, list) else [])
+    item_ids = [str(i["id"]) for i in raw_items]
+    assert str(item.id) in item_ids
+
+    # Switch to User B (different identity)
+    user_b_token = generate_test_token(
+        sub="other_user_sub_555",
+        email="user_b@example.com",
+        name="User B"
+    )
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {user_b_token}")
+
+    # User B must NOT see Alex's chat session or content item
+    b_sessions_res = client.get("/api/v1/chat/sessions/")
+    assert b_sessions_res.status_code == status.HTTP_200_OK
+    raw_b_sessions = b_sessions_res.data.get("results", b_sessions_res.data if isinstance(b_sessions_res.data, list) else [])
+    b_session_ids = [str(s["id"]) for s in raw_b_sessions]
+    assert str(session.id) not in b_session_ids
+
+    b_items_res = client.get("/api/v1/content/items/")
+    assert b_items_res.status_code == status.HTTP_200_OK
+    raw_b_items = b_items_res.data.get("results", b_items_res.data if isinstance(b_items_res.data, list) else [])
+    b_item_ids = [str(i["id"]) for i in raw_b_items]
+    assert str(item.id) not in b_item_ids
+
+    # User B attempting direct access to Alex's chat session must be 404
+    direct_res = client.get(f"/api/v1/chat/sessions/{session.id}/")
+    assert direct_res.status_code == status.HTTP_404_NOT_FOUND
+

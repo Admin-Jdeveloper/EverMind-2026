@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from django.db import transaction
+from django.db.models import Count
 from .models import Collection, Tag, ContentItem, ContentChunk, SavedSearch
 from .youtube import is_youtube_url, normalize_youtube_url
 from .serializers import (
@@ -33,7 +34,14 @@ from .serializers import (
     SavedSearchSerializer,
     WebClipSerializer
 )
-from .storage import upload_file_bytes, generate_presigned_download_url, delete_file
+from .storage import (
+    upload_file_bytes,
+    generate_presigned_download_url,
+    delete_file,
+    StorageServiceError,
+    StorageAuthenticationError,
+    StorageUploadError
+)
 from .tasks import process_url_content, process_document_content, process_note_content
 from core.throttling import IngestionRateThrottle, SearchRateThrottle, ExportImportRateThrottle
 
@@ -112,7 +120,11 @@ class ContentItemViewSet(viewsets.ModelViewSet):
         return ContentItemSerializer
 
     def get_queryset(self):
-        qs = ContentItem.objects.filter(user=self.request.user).select_related('collection').prefetch_related('tags', 'chunks')
+        qs = ContentItem.objects.filter(user=self.request.user).select_related('collection')
+        if self.action == 'retrieve':
+            qs = qs.prefetch_related('tags', 'chunks')
+        else:
+            qs = qs.prefetch_related('tags').annotate(annotated_chunk_count=Count('chunks'))
         
         # Filtering parameters
         content_type = self.request.query_params.get('content_type')
@@ -240,6 +252,20 @@ class ContentItemViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK if sync_mode else status.HTTP_202_ACCEPTED
         )
 
+    @action(detail=True, methods=['get'])
+    def status(self, request, pk=None):
+        """Targeted status check for a single content item.
+        Avoids loading chunks, embeddings, or full library querysets.
+        """
+        item = self.get_object()
+        return Response({
+            'id': str(item.id),
+            'ingestion_status': item.ingestion_status,
+            'error_message': item.error_message or '',
+            'chunk_count': getattr(item, 'annotated_chunk_count', None) or item.metadata.get('chunk_count', 0),
+            'updated_at': item.updated_at,
+        })
+
 class IngestUrlView(APIView):
     """POST /api/v1/content/urls/"""
     permission_classes = [IsAuthenticated]
@@ -296,10 +322,25 @@ class IngestUrlView(APIView):
         # Trigger Celery asynchronous ingestion task
         sync_mode = request.headers.get('X-Sync-Ingestion') == 'true'
         if sync_mode:
-            process_url_content(str(item.id), allow_test_local=True)
-            item.refresh_from_db()
+            try:
+                process_url_content(str(item.id), allow_test_local=True)
+                item.refresh_from_db()
+            except Exception as e:
+                logger.error(f"[URL_INGEST_ERROR] Synchronous URL processing failed for {item.id}: {e}")
+                item.ingestion_status = ContentItem.STATUS_FAILED
+                item.error_message = f"URL processing failed: {str(e)[:200]}"
+                item.save(update_fields=['ingestion_status', 'error_message'])
         else:
-            transaction.on_commit(lambda: process_url_content.delay(str(item.id)))
+            def _dispatch_url(item_id):
+                try:
+                    process_url_content.delay(item_id)
+                except Exception as q_err:
+                    logger.error(f"[CELERY_QUEUE_ERROR] Failed queueing URL task for {item_id}: {q_err}")
+                    ContentItem.objects.filter(id=item_id).update(
+                        ingestion_status=ContentItem.STATUS_FAILED,
+                        error_message="URL saved, but background ingestion queue is temporarily unavailable."
+                    )
+            transaction.on_commit(lambda: _dispatch_url(str(item.id)))
 
         return Response(ContentItemSerializer(item).data, status=status.HTTP_202_ACCEPTED if not sync_mode else status.HTTP_201_CREATED)
 
@@ -371,6 +412,7 @@ class UploadDocumentView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
+        request_id = getattr(request, 'request_id', None) or request.META.get('HTTP_X_REQUEST_ID', '')
         serializer = DocumentUploadSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -387,14 +429,46 @@ class UploadDocumentView(APIView):
             if not collection:
                 return Response({'error': 'Collection not found or unauthorized.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Read file bytes and upload to MinIO S3
+        # 1. Read file bytes and upload to S3 / Object Storage
         file_bytes = file_obj.read()
-        file_key = upload_file_bytes(
-            user_id=str(request.user.id),
-            file_bytes=file_bytes,
-            filename=file_obj.name,
-            content_type=file_obj.content_type
-        )
+        file_key = None
+        try:
+            file_key = upload_file_bytes(
+                user_id=str(request.user.id),
+                file_bytes=file_bytes,
+                filename=file_obj.name,
+                content_type=file_obj.content_type
+            )
+        except StorageAuthenticationError as auth_err:
+            logger.error(f"[STORAGE_AUTH_FAILURE] request_id={request_id} user={request.user.id} file={file_obj.name}: {auth_err}")
+            return Response({
+                'success': False,
+                'error': {
+                    'status_code': status.HTTP_502_BAD_GATEWAY,
+                    'message': 'Storage authentication failed. Please verify storage credentials.',
+                    'request_id': request_id
+                }
+            }, status=status.HTTP_502_BAD_GATEWAY)
+        except StorageUploadError as upload_err:
+            logger.error(f"[STORAGE_UPLOAD_FAILURE] request_id={request_id} user={request.user.id} file={file_obj.name}: {upload_err}")
+            return Response({
+                'success': False,
+                'error': {
+                    'status_code': status.HTTP_502_BAD_GATEWAY,
+                    'message': f"Storage upload failed: {str(upload_err)}",
+                    'request_id': request_id
+                }
+            }, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as exc:
+            logger.error(f"[STORAGE_UNEXPECTED_FAILURE] request_id={request_id} user={request.user.id} file={file_obj.name}: {type(exc).__name__}")
+            return Response({
+                'success': False,
+                'error': {
+                    'status_code': status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    'message': 'Failed to upload document to storage service.',
+                    'request_id': request_id
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         meta = {
             'filename': file_obj.name,
@@ -405,26 +479,58 @@ class UploadDocumentView(APIView):
         if detected_fmt:
             meta['detected_format'] = detected_fmt
 
-        item = ContentItem.objects.create(
-            user=request.user,
-            content_type=ContentItem.TYPE_DOCUMENT,
-            title=title,
-            file_key=file_key,
-            collection=collection,
-            ingestion_status=ContentItem.STATUS_PENDING,
-            metadata=meta
-        )
+        # 2. Persist metadata in PostgreSQL with transactional consistency
+        try:
+            with transaction.atomic():
+                item = ContentItem.objects.create(
+                    user=request.user,
+                    content_type=ContentItem.TYPE_DOCUMENT,
+                    title=title,
+                    file_key=file_key,
+                    collection=collection,
+                    ingestion_status=ContentItem.STATUS_PENDING,
+                    metadata=meta
+                )
 
-        for tag_name in tags:
-            tag, _ = Tag.objects.get_or_create(user=request.user, name=tag_name.strip())
-            item.tags.add(tag)
+                for tag_name in tags:
+                    tag, _ = Tag.objects.get_or_create(user=request.user, name=tag_name.strip())
+                    item.tags.add(tag)
+        except Exception as db_exc:
+            # S3 upload succeeded, but PostgreSQL metadata persistence failed.
+            # Clean up newly uploaded S3 object to prevent orphaned storage leaks.
+            logger.error(
+                f"[DATABASE_PERSISTENCE_FAILURE] request_id={request_id} item_title={title} "
+                f"rolling back and cleaning up S3 key {file_key}: {db_exc}"
+            )
+            if file_key:
+                try:
+                    delete_file(file_key)
+                except Exception as del_err:
+                    logger.warning(f"Failed to delete orphaned S3 object {file_key}: {del_err}")
+            raise
 
+        # 3. Trigger synchronous or asynchronous background ingestion
         sync_mode = request.headers.get('X-Sync-Ingestion') == 'true'
         if sync_mode:
-            process_document_content(str(item.id))
-            item.refresh_from_db()
+            try:
+                process_document_content(str(item.id))
+                item.refresh_from_db()
+            except Exception as task_err:
+                logger.error(f"[SYNC_INGESTION_FAILURE] request_id={request_id} item={item.id}: {task_err}")
+                item.ingestion_status = ContentItem.STATUS_FAILED
+                item.error_message = f"Document processing failed: {str(task_err)[:200]}"
+                item.save(update_fields=['ingestion_status', 'error_message'])
         else:
-            transaction.on_commit(lambda: process_document_content.delay(str(item.id)))
+            def _dispatch_document(item_id):
+                try:
+                    process_document_content.delay(item_id)
+                except Exception as q_err:
+                    logger.error(f"[CELERY_QUEUE_ERROR] request_id={request_id} failed queueing document task {item_id}: {q_err}")
+                    ContentItem.objects.filter(id=item_id).update(
+                        ingestion_status=ContentItem.STATUS_FAILED,
+                        error_message="Document saved, but background ingestion queue is temporarily unavailable. Please retry from library."
+                    )
+            transaction.on_commit(lambda: _dispatch_document(str(item.id)))
 
         return Response(ContentItemSerializer(item).data, status=status.HTTP_202_ACCEPTED if not sync_mode else status.HTTP_201_CREATED)
 

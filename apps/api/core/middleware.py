@@ -45,17 +45,25 @@ class SecurityHeadersMiddleware:
 
         return response
 
+import uuid
+
 class RequestAuditLoggingMiddleware:
     """
-    Logs API requests with duration and user context, guaranteeing sensitive token redaction.
+    Logs API requests with duration, user context, and Request ID, guaranteeing sensitive token redaction.
     """
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        request_id = request.META.get('HTTP_X_REQUEST_ID') or str(uuid.uuid4())
+        request.request_id = request_id
+
         start_time = time.time()
         response = self.get_response(request)
         duration_ms = round((time.time() - start_time) * 1000, 2)
+
+        # Propagate X-Request-ID in response headers
+        response['X-Request-ID'] = request_id
 
         user_id = str(request.user.id) if getattr(request, 'user', None) and request.user.is_authenticated else 'anonymous'
         path = request.path
@@ -63,7 +71,7 @@ class RequestAuditLoggingMiddleware:
         # Do not log health checks to keep logs clean
         if not path.startswith('/api/v1/health'):
             logger.info(
-                f"[AUDIT] {request.method} {path} -> HTTP {response.status_code} "
+                f"[AUDIT] request_id={request_id} {request.method} {path} -> HTTP {response.status_code} "
                 f"({duration_ms}ms) user={user_id} ip={self.get_client_ip(request)}"
             )
 

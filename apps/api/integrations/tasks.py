@@ -19,7 +19,7 @@ from .connectors.registry import get_connector
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=10)
+@shared_task(bind=True, max_retries=2, default_retry_delay=10, ignore_result=True)
 def sync_account_task(self, account_id: str):
     """Execute asynchronous content sync for a connected third-party account."""
     try:

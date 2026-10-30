@@ -152,7 +152,7 @@ def process_youtube_content_internal(task_instance, item: ContentItem):
     )
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+@shared_task(bind=True, max_retries=3, default_retry_delay=5, ignore_result=True)
 def process_url_content(self, content_item_id: str, allow_test_local: bool = False):
     """
     Fetch URL content safely through SSRF protection or specialized YouTube pipeline.
@@ -280,7 +280,7 @@ def process_url_content(self, content_item_id: str, allow_test_local: bool = Fal
             except self.MaxRetriesExceededError:
                 pass
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+@shared_task(bind=True, max_retries=3, default_retry_delay=5, ignore_result=True)
 def process_document_content(self, content_item_id: str):
     """
     Download uploaded file from MinIO, extract text (PDF/DOCX/PPTX/XLSX/CSV/TXT/MD), and generate chunks.
@@ -404,7 +404,7 @@ def process_document_content(self, content_item_id: str):
                 except self.MaxRetriesExceededError:
                     pass
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+@shared_task(bind=True, max_retries=3, default_retry_delay=5, ignore_result=True)
 def process_note_content(self, content_item_id: str):
     """
     Chunk and index a user-created plain text note.
@@ -500,7 +500,7 @@ def _dispatch_embedding_task(chunk_ids: list):
         except Exception as e:
             logger.warning(f"Could not generate embeddings synchronously: {e}")
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+@shared_task(bind=True, max_retries=3, default_retry_delay=5, ignore_result=True)
 def generate_chunk_embeddings(self, chunk_ids: list):
     """
     Generate and store vector embeddings for the specified ContentChunks.
@@ -545,7 +545,7 @@ def generate_chunk_embeddings(self, chunk_ids: list):
         except (self.MaxRetriesExceededError, AttributeError):
             logger.error(f"[DIAGNOSTIC] Exceeded max retries generating embeddings for chunks: {chunk_ids}")
 
-@shared_task
+@shared_task(ignore_result=True)
 def reembed_user_content(user_id: str):
     """
     Re-generate embeddings for all chunks belonging to a specific user (e.g. after model upgrade).

@@ -216,8 +216,10 @@ export function QuickAddModal({
       }
 
       if (!res.ok) {
+        const requestId = res.headers.get('x-request-id') || '';
         const errorData = await res.json().catch(() => ({}));
         let errorMsg = 'Failed to ingest content item.';
+        const refId = errorData?.error?.request_id || requestId;
         if (typeof errorData === 'object' && errorData !== null) {
           if (errorData.error) {
             errorMsg = typeof errorData.error === 'string' ? errorData.error : errorData.error.message || JSON.stringify(errorData.error);
@@ -230,6 +232,9 @@ export function QuickAddModal({
               errorMsg = Array.isArray(val) ? `${firstKey}: ${val.join(' ')}` : `${firstKey}: ${val}`;
             }
           }
+        }
+        if (refId && !errorMsg.includes(refId)) {
+          errorMsg = `${errorMsg} (Ref: ${refId})`;
         }
         setErrorMessage(errorMsg);
         setIsLoading(false);
@@ -249,10 +254,8 @@ export function QuickAddModal({
         onSuccess(createdItem);
       }
 
-      setTimeout(() => {
-        resetForm();
-        onClose();
-      }, 700);
+      resetForm();
+      onClose();
     } catch (err: any) {
       setErrorMessage(err?.message || 'Network error while contacting server.');
       setIsLoading(false);

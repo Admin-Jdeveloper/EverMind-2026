@@ -4,6 +4,7 @@ export interface TokenUser {
   id: string;
   email: string;
   name?: string;
+  image?: string;
 }
 
 /**
@@ -22,6 +23,7 @@ export function generateInternalApiToken(user: TokenUser): string {
     sub: user.id,
     email: user.email,
     name: user.name || '',
+    image: user.image || '',
     iss: issuer,
     aud: audience,
     iat: now,

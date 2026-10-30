@@ -207,8 +207,19 @@ export function CollectionAddModal({
       }
 
       if (!res.ok) {
+        const requestId = res.headers.get('x-request-id') || '';
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || errJson.detail || 'Failed to create item in this collection.');
+        let msg = 'Failed to create item in this collection.';
+        if (errJson?.error) {
+          msg = typeof errJson.error === 'string' ? errJson.error : errJson.error.message || JSON.stringify(errJson.error);
+        } else if (errJson?.detail) {
+          msg = errJson.detail;
+        }
+        const refId = errJson?.error?.request_id || requestId;
+        if (refId && !msg.includes(refId)) {
+          msg = `${msg} (Ref: ${refId})`;
+        }
+        throw new Error(msg);
       }
 
       const createdItem = await res.json();
@@ -224,10 +235,8 @@ export function CollectionAddModal({
         window.dispatchEvent(new CustomEvent('library-item-added', { detail: createdItem }));
       }
 
-      setTimeout(() => {
-        resetForm();
-        onClose();
-      }, 700);
+      resetForm();
+      onClose();
     } catch (err: any) {
       setErrorMessage(err.message || 'An unexpected error occurred.');
       setIsLoading(false);

@@ -10,19 +10,44 @@ Scoped rate limits backed by Redis cache:
 - auth: 30/minute (protects login and identity exchange endpoints)
 """
 
+import logging
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
-class IngestionRateThrottle(UserRateThrottle):
+logger = logging.getLogger(__name__)
+
+class SafeThrottleMixin:
+    """
+    Guarantees high-availability API resilience.
+    If the Redis cache is temporarily degraded, disconnected, or connection-limited,
+    the throttle fails open instead of crashing business-critical API requests with 500 errors.
+    """
+    def allow_request(self, request, view):
+        try:
+            return super().allow_request(request, view)
+        except Exception as exc:
+            logger.warning(
+                f"[THROTTLE_BYPASS] Cache unavailable for throttle '{self.__class__.__name__}': {exc}. "
+                "Failing open to maintain API availability."
+            )
+            return True
+
+class SafeAnonRateThrottle(SafeThrottleMixin, AnonRateThrottle):
+    pass
+
+class SafeUserRateThrottle(SafeThrottleMixin, UserRateThrottle):
+    pass
+
+class IngestionRateThrottle(SafeThrottleMixin, UserRateThrottle):
     scope = 'ingestion'
 
-class SearchRateThrottle(UserRateThrottle):
+class SearchRateThrottle(SafeThrottleMixin, UserRateThrottle):
     scope = 'search'
 
-class ChatRateThrottle(UserRateThrottle):
+class ChatRateThrottle(SafeThrottleMixin, UserRateThrottle):
     scope = 'chat'
 
-class ExportImportRateThrottle(UserRateThrottle):
+class ExportImportRateThrottle(SafeThrottleMixin, UserRateThrottle):
     scope = 'export_import'
 
-class AuthRateThrottle(AnonRateThrottle):
+class AuthRateThrottle(SafeThrottleMixin, AnonRateThrottle):
     scope = 'auth'

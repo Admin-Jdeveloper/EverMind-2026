@@ -21,6 +21,19 @@ from django.conf import settings
 logger = logging.getLogger('content.storage')
 
 
+class StorageServiceError(Exception):
+    """Base exception for object storage operations."""
+    pass
+
+class StorageAuthenticationError(StorageServiceError):
+    """Raised when S3 credentials or signature validation fails."""
+    pass
+
+class StorageUploadError(StorageServiceError):
+    """Raised when an object upload to storage fails."""
+    pass
+
+
 def get_active_bucket_name() -> str:
     """Return the configured bucket name based on the active storage provider."""
     provider = getattr(settings, 'STORAGE_PROVIDER', 'minio').lower()
@@ -51,8 +64,8 @@ def get_s3_client():
             client_kwargs['aws_secret_access_key'] = aws_secret_key
 
         endpoint_override = getattr(settings, 'AWS_S3_ENDPOINT_URL', None)
-        if endpoint_override:
-            client_kwargs['endpoint_url'] = endpoint_override
+        if endpoint_override and endpoint_override.strip():
+            client_kwargs['endpoint_url'] = endpoint_override.strip()
 
         return boto3.client(**client_kwargs)
 
@@ -73,21 +86,25 @@ def ensure_bucket_exists():
     """
     Verify that the configured storage bucket is reachable.
     Creates local MinIO bucket if missing; verifies AWS S3 bucket without requiring admin create rights.
+    Under least-privilege IAM policies, head_bucket 403 (Forbidden) is non-fatal.
     """
+    provider = getattr(settings, 'STORAGE_PROVIDER', 'minio').lower()
     client = get_s3_client()
     bucket_name = get_active_bucket_name()
-    provider = getattr(settings, 'STORAGE_PROVIDER', 'minio').lower()
 
     try:
         client.head_bucket(Bucket=bucket_name)
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code')
+        error_code = str(e.response.get('Error', {}).get('Code', ''))
         if provider == 'minio' or error_code in ('404', 'NoSuchBucket'):
             try:
                 client.create_bucket(Bucket=bucket_name)
                 logger.info(f"Created storage bucket '{bucket_name}'.")
             except Exception as create_err:
                 logger.warning(f"Notice: Failed to create bucket '{bucket_name}': {create_err}")
+        elif error_code in ('403', 'AccessDenied'):
+            # Least-privilege IAM policy may permit s3:PutObject without s3:ListBucket / head_bucket
+            logger.info(f"Bucket head check returned {error_code} for '{bucket_name}'; proceeding under least-privilege policy.")
         else:
             logger.warning(f"Notice: Storage bucket '{bucket_name}' head check returned {error_code}: {e}")
     except Exception as e:
@@ -110,24 +127,44 @@ def upload_file_bytes(user_id: str, file_bytes: bytes, filename: str, content_ty
     Upload raw file bytes into the user's isolated storage prefix.
     Sanitizes filename and uses unique prefix to prevent path traversal and object collisions.
     Returns the storage key: users/{user_id}/files/{safe_prefix}_{basename}.
+    Raises StorageServiceError on failure without leaking credentials or signatures.
     """
-    ensure_bucket_exists()
+    provider = getattr(settings, 'STORAGE_PROVIDER', 'minio').lower()
+    if provider == 'minio':
+        ensure_bucket_exists()
+
     client = get_s3_client()
     bucket_name = get_active_bucket_name()
-
     file_key = build_storage_key(user_id, filename)
-    
-    client.put_object(
-        Bucket=bucket_name,
-        Key=file_key,
-        Body=file_bytes,
-        ContentType=content_type,
-        Metadata={
-            'owner_uuid': str(user_id),
-            'filename': filename
-        }
-    )
-    return file_key
+
+    try:
+        client.put_object(
+            Bucket=bucket_name,
+            Key=file_key,
+            Body=file_bytes,
+            ContentType=content_type,
+            Metadata={
+                'owner_uuid': str(user_id),
+                'filename': os.path.basename(filename)
+            }
+        )
+        return file_key
+    except ClientError as exc:
+        error_code = exc.response.get('Error', {}).get('Code', 'Unknown')
+        logger.error(
+            f"[S3_CLIENT_ERROR] Failed uploading '{filename}' to bucket '{bucket_name}': "
+            f"Code={error_code}"
+        )
+        if error_code in ('SignatureDoesNotMatch', 'InvalidAccessKeyId', 'AuthFailure'):
+            raise StorageAuthenticationError("Storage authentication failed: invalid credentials or signature mismatch.") from None
+        if error_code in ('AccessDenied', '403'):
+            raise StorageUploadError(f"Access denied writing to storage bucket '{bucket_name}'.") from None
+        if error_code in ('NoSuchBucket', '404'):
+            raise StorageUploadError(f"Configured storage bucket '{bucket_name}' does not exist.") from None
+        raise StorageUploadError(f"Storage upload failed ({error_code}).") from None
+    except Exception as exc:
+        logger.error(f"[S3_UPLOAD_ERROR] Unexpected error uploading '{filename}' to bucket '{bucket_name}': {type(exc).__name__}")
+        raise StorageUploadError("Storage service temporarily unavailable.") from None
 
 
 def download_file_bytes(file_key: str) -> bytes:

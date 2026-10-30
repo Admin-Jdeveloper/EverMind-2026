@@ -17,7 +17,9 @@ import {
   Plus,
   ChevronRight,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { ShellLayout } from '@/components/shell/shell-layout';
 import { getCanonicalContentMeta, type CanonicalContentMeta } from '@/lib/content-utils';
@@ -51,6 +53,8 @@ export default function DashboardPage() {
   const [collections, setCollections] = React.useState<CollectionItem[]>([]);
   const [recentChats, setRecentChats] = React.useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = React.useState(false);
 
   // Trigger quick add modal
   const openQuickAdd = (tab?: 'document' | 'link' | 'note') => {
@@ -67,9 +71,18 @@ export default function DashboardPage() {
       ]);
 
       if (itemsRes.ok) {
+        setFetchError(null);
+        setIsAuthError(false);
         const itemsData = await itemsRes.json();
         const list = Array.isArray(itemsData) ? itemsData : itemsData.results || [];
         setRecentRawItems(list.slice(0, 6));
+      } else {
+        if (itemsRes.status === 401 || itemsRes.status === 403) {
+          setIsAuthError(true);
+          setFetchError('Session expired or unauthorized.');
+        } else {
+          setFetchError('Unable to load content library items.');
+        }
       }
 
       if (collectionsRes.ok) {
@@ -83,8 +96,9 @@ export default function DashboardPage() {
         const sessList = Array.isArray(sessData) ? sessData : sessData.results || [];
         setRecentChats(sessList.slice(0, 4));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load dashboard:', err);
+      setFetchError(err?.message || 'Network error while loading dashboard.');
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -94,21 +108,74 @@ export default function DashboardPage() {
     loadData();
   }, [loadData]);
 
-  // Polling for any in-progress indexing items in recently added list
+  // Targeted bounded polling for any in-progress indexing items in recently added list
+  const inProgressIdsKey = React.useMemo(() => {
+    return recentRawItems
+      .filter((item) => {
+        const s = (item.ingestion_status || '').toLowerCase();
+        return s && !['completed', 'partial', 'failed'].includes(s);
+      })
+      .map((i) => i.id)
+      .sort()
+      .join(',');
+  }, [recentRawItems]);
+
   React.useEffect(() => {
-    const hasInProgress = recentRawItems.some((item) => {
-      const s = (item.ingestion_status || '').toLowerCase();
-      return s && !['completed', 'partial', 'failed'].includes(s);
-    });
+    if (!inProgressIdsKey) return;
+    const targetIds = inProgressIdsKey.split(',').filter(Boolean);
+    if (targetIds.length === 0) return;
 
-    if (!hasInProgress) return;
+    let pollAttempts = 0;
+    const maxPollAttempts = 25; // 25 attempts * 4s = 100s max
 
-    const interval = setInterval(() => {
-      loadData(true);
-    }, 2500);
+    const interval = setInterval(async () => {
+      pollAttempts += 1;
+      if (pollAttempts > maxPollAttempts) {
+        clearInterval(interval);
+        return;
+      }
+
+      try {
+        const statusPromises = targetIds.map(async (id) => {
+          const res = await fetch(`/api/v1/content/items/${id}/status/`, { cache: 'no-store' });
+          if (res.ok) {
+            return await res.json();
+          }
+          return null;
+        });
+
+        const results = await Promise.all(statusPromises);
+        let anyTerminal = false;
+
+        setRecentRawItems((prev) =>
+          prev.map((item) => {
+            const update = results.find((r) => r && r.id === item.id);
+            if (update) {
+              const newStatus = update.ingestion_status;
+              if (['completed', 'partial', 'failed'].includes((newStatus || '').toLowerCase())) {
+                anyTerminal = true;
+              }
+              return {
+                ...item,
+                ingestion_status: newStatus,
+                error_message: update.error_message,
+                chunk_count: update.chunk_count ?? item.chunk_count,
+              };
+            }
+            return item;
+          })
+        );
+
+        if (anyTerminal) {
+          loadData(true);
+        }
+      } catch (err) {
+        // Silently tolerate transient poll errors
+      }
+    }, 4000);
 
     return () => clearInterval(interval);
-  }, [recentRawItems, loadData]);
+  }, [inProgressIdsKey, loadData]);
 
   // Listen for items added via QuickAddModal
   React.useEffect(() => {
@@ -286,6 +353,21 @@ export default function DashboardPage() {
                 <div className="py-8 text-center text-xs text-[var(--muted-foreground)] flex items-center justify-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading content...
+                </div>
+              ) : fetchError ? (
+                <div className="py-6 px-4 text-center text-xs text-[var(--muted-foreground)] rounded-xl border border-rose-500/20 bg-rose-500/5 space-y-2">
+                  <div className="flex items-center justify-center gap-1.5 text-rose-500 font-medium">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Failed to load content</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--muted-foreground)]">{fetchError}</p>
+                  <button
+                    onClick={() => loadData()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--surface-base)] border border-[var(--border)] text-xs hover:bg-[var(--surface-hover)] text-[var(--foreground)] transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Retry
+                  </button>
                 </div>
               ) : recentRawItems.length === 0 ? (
                 <div className="py-8 text-center text-xs text-[var(--muted-foreground)]">

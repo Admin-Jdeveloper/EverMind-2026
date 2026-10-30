@@ -72,55 +72,66 @@ class AuthJsBridgeAuthentication(BaseAuthentication):
         authjs_id = payload.get('sub')
         email = payload.get('email')
         name = payload.get('name', '')
+        image = payload.get('image', '') or payload.get('picture', '')
 
         if not authjs_id or not email:
             raise AuthenticationFailed("Token missing required 'sub' or 'email' claims.")
 
         # Provision or retrieve mapped Django user
-        user = self.get_or_create_user(authjs_id=authjs_id, email=email, name=name)
+        user = self.get_or_create_user(authjs_id=authjs_id, email=email, name=name, image=image)
         if not user.is_active:
             raise AuthenticationFailed("User account is inactive or disabled.")
 
         return (user, token)
 
-    def get_or_create_user(self, authjs_id: str, email: str, name: str = ''):
+    def get_or_create_user(self, authjs_id: str, email: str, name: str = '', image: str = ''):
         """
-        Locates or provisions the corresponding Django user for the Auth.js subject.
-        Maintains stable identity mapping between Next.js and Django.
+        Locates or provisions the corresponding Django user for the Auth.js / Google subject.
+        Maintains stable identity mapping between Next.js and Django and synchronizes Google profile data.
         """
-        # 1. Search by primary key if authjs_id is a valid Django User UUID
         import uuid
+        user = None
+
+        # 1. Search by primary key if authjs_id is a valid Django User UUID
         try:
             uid = uuid.UUID(str(authjs_id))
             user = User.objects.filter(id=uid).first()
-            if user:
-                if not user.authjs_id:
-                    user.authjs_id = authjs_id
-                    user.save(update_fields=['authjs_id'])
-                return user
         except (ValueError, TypeError):
             pass
 
-        # 2. Search by Auth.js subject ID
-        user = User.objects.filter(authjs_id=authjs_id).first()
-        if user:
-            return user
+        # 2. Search by Auth.js subject ID (e.g. Google OAuth sub)
+        if not user:
+            user = User.objects.filter(authjs_id=authjs_id).first()
 
-        # 2. Search by verified email
-        user = User.objects.filter(email__iexact=email).first()
+        # 3. Search by verified email
+        if not user:
+            user = User.objects.filter(email__iexact=email).first()
+
         if user:
-            # Link Auth.js identity to existing user account
-            user.authjs_id = authjs_id
+            # Synchronize Google identity / profile fields if updated
+            update_fields = []
+            if not user.authjs_id or user.authjs_id != authjs_id:
+                user.authjs_id = authjs_id
+                update_fields.append('authjs_id')
             if name and not user.name:
                 user.name = name
-            user.save(update_fields=['authjs_id', 'name'])
+                update_fields.append('name')
+            if image and user.image != image:
+                user.image = image
+                update_fields.append('image')
+            if not user.email_verified:
+                user.email_verified = True
+                update_fields.append('email_verified')
+            if update_fields:
+                user.save(update_fields=update_fields)
             return user
 
-        # 3. Provision new user account
+        # 4. Provision new user account for Google / Auth.js sign-in
         user = User.objects.create_user(
-            email=email.lower(),
+            email=email.lower().strip(),
             authjs_id=authjs_id,
             name=name,
+            image=image,
             email_verified=True
         )
         return user

@@ -44,8 +44,17 @@ class ContentChunkSerializer(serializers.ModelSerializer):
 class ContentItemSerializer(serializers.ModelSerializer):
     collection_name = serializers.CharField(source='collection.name', read_only=True)
     tags_list = serializers.SlugRelatedField(many=True, slug_field='name', source='tags', read_only=True)
-    tags = serializers.ListField(child=serializers.CharField(max_length=64), required=False, write_only=True)
-    chunk_count = serializers.IntegerField(source='chunks.count', read_only=True)
+    chunk_count = serializers.SerializerMethodField()
+
+    def get_chunk_count(self, obj):
+        # 1. Use pre-annotated count from queryset if present (0 additional queries)
+        if hasattr(obj, 'annotated_chunk_count'):
+            return obj.annotated_chunk_count
+        # 2. Use stored metadata count if present (0 additional queries)
+        if isinstance(obj.metadata, dict) and 'chunk_count' in obj.metadata:
+            return obj.metadata['chunk_count']
+        # 3. Fallback to count query only if not annotated
+        return obj.chunks.count()
 
     class Meta:
         model = ContentItem

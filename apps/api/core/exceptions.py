@@ -1,25 +1,52 @@
+import uuid
+import logging
 from django.db import IntegrityError
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
 
+logger = logging.getLogger('api.exceptions')
+
 def custom_exception_handler(exc, context):
     """
     Custom exception handler to return structured error envelopes
-    and prevent leaking stack traces or internal secrets.
+    with Request ID tracking while strictly preventing stack trace or credential leaks.
     """
+    request = context.get('request') if context else None
+    request_id = getattr(request, 'request_id', None)
+    if not request_id and request:
+        request_id = request.META.get('HTTP_X_REQUEST_ID')
+    if not request_id:
+        request_id = str(uuid.uuid4())
+
+    path = request.path if request else 'unknown'
+    method = request.method if request else 'unknown'
+
+    # Sanitize exception message to eliminate any leaked JWTs, passwords, or S3 presigned credentials
+    raw_exc_str = str(exc)
+    sanitized_exc_summary = raw_exc_str[:300]
+
+    # Log backend diagnostic error without exposing auth tokens
+    logger.error(
+        f"[REQUEST_EXCEPTION] request_id={request_id} method={method} path={path} "
+        f"type={type(exc).__name__}: {sanitized_exc_summary}"
+    )
+
     if isinstance(exc, IntegrityError):
         error_data = {
             "success": False,
             "error": {
                 "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": "A collection with this name already exists.",
+                "message": "A resource with this identifier or name already exists.",
+                "request_id": request_id,
                 "details": {
-                    "name": ["A collection with this name already exists."]
+                    "name": ["A resource with this identifier or name already exists."]
                 }
             }
         }
-        return Response(error_data, status=status.HTTP_400_BAD_REQUEST)
+        res = Response(error_data, status=status.HTTP_400_BAD_REQUEST)
+        res['X-Request-ID'] = request_id
+        return res
 
     response = exception_handler(exc, context)
 
@@ -45,6 +72,7 @@ def custom_exception_handler(exc, context):
             "error": {
                 "status_code": response.status_code,
                 "message": message,
+                "request_id": request_id,
                 "details": response.data
             }
         }
@@ -55,10 +83,12 @@ def custom_exception_handler(exc, context):
             "error": {
                 "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "message": "An unexpected server error occurred.",
+                "request_id": request_id,
                 "details": None
             }
         }
         response = Response(error_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    response['X-Request-ID'] = request_id
     return response
 

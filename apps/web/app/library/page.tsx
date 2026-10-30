@@ -190,6 +190,8 @@ export default function LibraryPage() {
   const [items, setItems] = React.useState<LibraryItem[]>([]);
   const [collections, setCollections] = React.useState<Array<{ id: string; name: string }>>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filterType, setFilterType] = React.useState<'All' | 'Document' | 'Link' | 'Note'>('All');
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
@@ -226,9 +228,18 @@ export default function LibraryPage() {
       ]);
 
       if (itemsRes.ok) {
+        setFetchError(null);
+        setIsAuthError(false);
         const data = await itemsRes.json();
         const list = Array.isArray(data) ? data : data.results || [];
         setItems(list.map(mapApiItem));
+      } else {
+        if (itemsRes.status === 401 || itemsRes.status === 403) {
+          setIsAuthError(true);
+          setFetchError('Session expired or unauthorized. Please sign in again.');
+        } else {
+          setFetchError('Unable to load your content library. An API error occurred.');
+        }
       }
 
       if (colsRes.ok) {
@@ -236,8 +247,9 @@ export default function LibraryPage() {
         const colList = Array.isArray(colData) ? colData : colData.results || [];
         setCollections(colList.map((c: any) => ({ id: String(c.id), name: c.name })));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load library items:', err);
+      setFetchError(err?.message || 'Network error while loading content library.');
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -247,45 +259,82 @@ export default function LibraryPage() {
     fetchItems();
   }, [fetchItems]);
 
-  // Check if any items are in active/non-terminal ingestion states
-  const hasInProgress = React.useMemo(() => {
-    return items.some((item) => {
-      const s = (item.status || '').toLowerCase();
-      return s && !['completed', 'partial', 'failed'].includes(s);
-    });
+  // Targeted bounded polling for items in active/non-terminal ingestion states
+  const inProgressIdsKey = React.useMemo(() => {
+    return items
+      .filter((item) => {
+        const s = (item.status || '').toLowerCase();
+        return s && !['completed', 'partial', 'failed'].includes(s);
+      })
+      .map((i) => i.id)
+      .sort()
+      .join(',');
   }, [items]);
 
-  // Periodic bounded polling for status updates while any item is in-progress
   React.useEffect(() => {
-    if (!hasInProgress) return;
+    if (!inProgressIdsKey) return;
+    const targetIds = inProgressIdsKey.split(',').filter(Boolean);
+    if (targetIds.length === 0) return;
+
+    let pollAttempts = 0;
+    const maxPollAttempts = 25; // 25 attempts * 4s = 100s max
 
     const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/v1/content/items/?ordering=-created_at', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          const list = Array.isArray(data) ? data : data.results || [];
-          setItems(list.map(mapApiItem));
+      pollAttempts += 1;
+      if (pollAttempts > maxPollAttempts) {
+        clearInterval(interval);
+        return;
+      }
 
-          // If the selected item in detail modal is currently in progress, refresh detail
-          if (selectedItemId) {
-            const currentItem = list.find((i: any) => String(i.id) === String(selectedItemId));
-            if (currentItem) {
-              const detailRes = await fetch(`/api/v1/content/items/${selectedItemId}/`, { cache: 'no-store' });
-              if (detailRes.ok) {
-                const detailData = await detailRes.json();
-                setItemDetail(detailData);
+      try {
+        const statusPromises = targetIds.map(async (id) => {
+          const res = await fetch(`/api/v1/content/items/${id}/status/`, { cache: 'no-store' });
+          if (res.ok) {
+            return await res.json();
+          }
+          return null;
+        });
+
+        const results = await Promise.all(statusPromises);
+        let anyTerminal = false;
+
+        setItems((prev) =>
+          prev.map((item) => {
+            const update = results.find((r) => r && String(r.id) === String(item.id));
+            if (update) {
+              const newStatus = update.ingestion_status;
+              if (['completed', 'partial', 'failed'].includes((newStatus || '').toLowerCase())) {
+                anyTerminal = true;
               }
+              return {
+                ...item,
+                status: newStatus,
+                error_message: update.error_message || undefined,
+                chunk_count: update.chunk_count ?? item.chunk_count,
+              };
             }
+            return item;
+          })
+        );
+
+        if (selectedItemId && targetIds.includes(String(selectedItemId))) {
+          const detailRes = await fetch(`/api/v1/content/items/${selectedItemId}/status/`, { cache: 'no-store' });
+          if (detailRes.ok) {
+            const statusData = await detailRes.json();
+            setItemDetail((prev: any) => (prev ? { ...prev, ingestion_status: statusData.ingestion_status } : prev));
           }
         }
+
+        if (anyTerminal) {
+          fetchItems(true);
+        }
       } catch (err) {
-        console.error('Failed to poll indexing status:', err);
+        // Silently tolerate transient poll errors
       }
-    }, 2500);
+    }, 4000);
 
     return () => clearInterval(interval);
-  }, [hasInProgress, selectedItemId]);
+  }, [inProgressIdsKey, selectedItemId, fetchItems]);
 
   // Retry handler for failed content items
   const handleRetryItem = async (itemId: string, e?: React.MouseEvent) => {
@@ -583,6 +632,30 @@ export default function LibraryPage() {
           <div className="py-20 text-center text-xs text-[var(--foreground-muted)] flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
             Loading knowledge library...
+          </div>
+        ) : fetchError ? (
+          <div className="py-16 text-center text-xs text-[var(--foreground-muted)] rounded-2xl border border-rose-500/30 bg-rose-500/5 p-8 space-y-4 max-w-lg mx-auto">
+            <AlertCircle className="mx-auto h-8 w-8 text-rose-500" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-[var(--foreground)]">Failed to load content library</p>
+              <p className="text-xs text-[var(--foreground-muted)]">{fetchError}</p>
+            </div>
+            {isAuthError ? (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-medium hover:opacity-90 transition-opacity"
+              >
+                Sign in
+              </Link>
+            ) : (
+              <button
+                onClick={() => fetchItems()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] text-xs font-medium hover:bg-[var(--surface-hover)] text-[var(--foreground)] transition-colors cursor-pointer"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Retry
+              </button>
+            )}
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="py-16 text-center text-xs text-[var(--foreground-muted)] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-8 space-y-3">

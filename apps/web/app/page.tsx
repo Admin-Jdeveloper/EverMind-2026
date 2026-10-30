@@ -22,6 +22,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTheme } from '@/components/theme-provider';
 import { BrandLogo } from '@/components/ui/brand-logo';
+import { getUserInitial } from '@/lib/avatar';
 
 export default function LandingPage() {
   const { theme, setTheme } = useTheme();
@@ -37,16 +38,7 @@ export default function LandingPage() {
 
   const user = session?.user;
   const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'User');
-  const initials =
-    displayName
-      .split(' ')
-      .filter(Boolean)
-      .map((part: string) => part[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) ||
-    displayName.slice(0, 2).toUpperCase() ||
-    'U';
+  const initial = getUserInitial(user?.name, user?.email, 'U');
 
   // Smooth scroll handler
   const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
@@ -143,7 +135,7 @@ export default function LandingPage() {
                 className="hidden xs:flex h-7 w-7 rounded-full bg-[#D6C2A3] text-[#10100F] items-center justify-center text-xs font-semibold shrink-0 shadow-xs"
                 title={user?.email || displayName}
               >
-                {initials}
+                {initial}
               </div>
               <span className="text-xs font-medium text-[var(--foreground)] hidden lg:inline truncate max-w-[120px]">
                 {displayName}
@@ -865,16 +857,6 @@ export default function LandingPage() {
               not compete for your attention.
             </span>
           </h2>
-
-          <div className="pt-2">
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full bg-[#10100F] hover:bg-[#222220] text-[#F5F2EB] text-xs sm:text-sm font-medium transition-all shadow-xl cursor-pointer"
-            >
-              <span>Create your workspace</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
         </div>
       </section>
 

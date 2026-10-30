@@ -17,7 +17,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   providers: [
     Google({
-      clientId: process.env.AUTH_GOOGLE_ID || "",
+      clientId: process.env.AUTH_GOOGLE_ID || process.env.NEXT_PUBLIC_AUTH_GOOGLE_ID || "",
       clientSecret: process.env.AUTH_GOOGLE_SECRET || "",
     }),
     Credentials({
@@ -52,6 +52,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               id: json.data.id,
               email: json.data.email,
               name: json.data.name,
+              image: json.data.image,
             };
           }
         } catch (err) {
@@ -77,11 +78,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return !!auth;
     },
-    jwt({ token, user }: { token: any; user?: any }) {
+    jwt({ token, user, account, profile }: { token: any; user?: any; account?: any; profile?: any }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
+        token.picture = user.image || profile?.picture || profile?.avatar_url;
+        token.provider = account?.provider || "credentials";
       }
       return token;
     },
@@ -90,6 +93,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string;
         session.user.email = token.email as string;
         session.user.name = token.name as string;
+        session.user.image = (token.picture || token.image) as string;
+        (session.user as any).provider = token.provider;
       }
       return session;
     },

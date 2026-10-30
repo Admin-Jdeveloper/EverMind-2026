@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useSession, signOut } from 'next-auth/react';
 import { BrandLogo } from '@/components/ui/brand-logo';
+import { getUserInitial } from '@/lib/avatar';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -41,15 +42,9 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobile
   const userMenuRef = React.useRef<HTMLDivElement>(null);
 
   const user = session?.user;
-  const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'Alex Morgan');
-  const displayEmail = user?.email || 'alex@evermind.io';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((part: string) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'AM';
+  const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'User');
+  const displayEmail = user?.email || 'user@evermind.io';
+  const initial = getUserInitial(user?.name, user?.email, 'U');
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -187,8 +182,12 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobile
               )}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="h-8 w-8 rounded-full bg-[var(--accent-sand)] text-[#141518] flex items-center justify-center text-xs font-semibold shrink-0">
-                  {initials}
+                <div className="h-8 w-8 rounded-full bg-[var(--accent-sand)] text-[#141518] flex items-center justify-center text-xs font-semibold shrink-0 overflow-hidden">
+                  {user?.image ? (
+                    <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
+                  ) : (
+                    initial
+                  )}
                 </div>
                 {!isCollapsed && (
                   <div className="min-w-0 flex-1">

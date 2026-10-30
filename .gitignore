@@ -11,6 +11,7 @@
 .env.local
 .env.development
 .env.development.local
+.env.example
 .env.test
 .env.test.local
 .env.production

@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 5: Search, Embeddings, and Retrieval Test Suite.
-Source of Truth: MediaCompile-prompt.md (Section 15: Phase 5 Tasks & Gates)
 
 Validates:
 1. Embedding Provider: Deterministic unit vector generation, 1536 dimension check, error handling.

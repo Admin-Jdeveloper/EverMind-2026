@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 2 Acceptance Test Gate: Hybrid Retrieval, Ranking, and Context Assembly
-Source of Truth: MediaCompile Autonomous RAG Engineering Master Prompt (Phase 2)
 
 Verifies:
 1. Exact-match queries.

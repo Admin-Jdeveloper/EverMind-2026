@@ -1,59 +1,116 @@
 # ==============================================================================
-# Evermind — .gitignore
+# Dependencies
 # ==============================================================================
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-debug.log*
 
-# ------------------------------------------------------------------------------
-# 1. Environment Variables & Secrets (NEVER COMMIT)
-# ------------------------------------------------------------------------------
+# Python virtual environments & packaging
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Rust build artifacts
+target/
+
+# ==============================================================================
+# Build Outputs & Caches
+# ==============================================================================
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+.cache/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+staticfiles/
+media/
+apps/api/models/
+
+# ==============================================================================
+# Environment & Secrets
+# ==============================================================================
 .env
-.env*
-.env.*
 .env.local
+.env.*.local
 .env.development
-.env.development.local
-.env.example
 .env.test
-.env.test.local
 .env.production
-.env.production.local
-.env.staging
-.env.local-real
-.env.local-docker
-*.env
-*.env.*
 !.env.example
-credentials.json
-token.json
+
+# Private keys, certificates, and credentials
 *.pem
 *.key
-*.cert
 *.crt
+*.p12
+*.pfx
+credentials.json
+token.json
+service-account*.json
+gcloud-key*.json
 
-# ------------------------------------------------------------------------------
-# 2. Markdown Files (Only root README.md is tracked)
-# ------------------------------------------------------------------------------
-*.md
-**/*.md
-!/README.md
+# ==============================================================================
+# Development Artifacts & Logs
+# ==============================================================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+celerybeat-schedule
+celerybeat.pid
 
-# ------------------------------------------------------------------------------
-# 3. Antigravity, Skills & Agent Setup Files
-# ------------------------------------------------------------------------------
-SKILLS/
-skills/
-.skills/
-antigravity/
-.antigravity/
-*.antigravity
-setup/
-setup_*.py
-setup_*.sh
-directives/
-execution/
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+test-results/
+playwright-report/
 
-# ------------------------------------------------------------------------------
-# 4. System & IDE Files
-# ------------------------------------------------------------------------------
+# Local databases & Docker volumes
+*.sqlite3
+*.sqlite3-journal
+*.db
+postgres_data/
+redis_data/
+minio_data/
+
+# Temporary intermediates directory
+.tmp/
+tmp/
+temp/
+
+# IDE & OS artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 .DS_Store?
 ._*
@@ -62,69 +119,17 @@ execution/
 ehthumbs.db
 Thumbs.db
 Desktop.ini
-$RECYCLE.BIN/
 
-.idea/
-.vscode/
-*.swp
-*.swo
-*.sublime-workspace
-*.sublime-project
-.project
-.settings/
+# ==============================================================================
+# Documentation & Markdown Files
+# ==============================================================================
+*.md
+**/*.md
+!README.md
+!**/README.md
 
-# ------------------------------------------------------------------------------
-# 5. Node.js & Next.js Build Outputs & Dependencies
-# ------------------------------------------------------------------------------
-node_modules/
-.next/
-out/
-build/
-dist/
-.npm/
-.yarn/
-.pnp
-.pnp.js
-*.tsbuildinfo
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# ------------------------------------------------------------------------------
-# 6. Python, Django, Celery & Pytest Artifacts
-# ------------------------------------------------------------------------------
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv/
-env.bak/
-venv.bak/
-*.egg-info/
-.installed.cfg
-*.egg
-staticfiles/
-media/
-*.sqlite3
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-*.cover
-*.lcov
-.nyc_output
-
-# ------------------------------------------------------------------------------
-# 7. Local Runtime, Docker & Temporary Storage
-# ------------------------------------------------------------------------------
-.tmp/
-docker-data/
-logs/
-*.log
-*.onnx
-apps/api/models/
+# Agent Artifacts
+SKILLS/
+.claude/
+.cursor/
+.windsurf/

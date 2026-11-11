@@ -1,6 +1,5 @@
 """
 MediaCompile — Grounded RAG Citation Validation and Provenance Verification Layer.
-Source of Truth: Chatbot_architecture_recall.md (Section 3: Citation Protocol & Phase 3)
 
 Responsibilities:
 1. Deterministic Provenance Verification:

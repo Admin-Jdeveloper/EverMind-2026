@@ -1,6 +1,5 @@
 """
 MediaCompile — YouTube Authorized Data API & Export Connector.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Priority 2: YouTube Connector)
 
 Features:
 1. Official Google YouTube Data API v3 connector (`https://www.googleapis.com/auth/youtube.readonly`).

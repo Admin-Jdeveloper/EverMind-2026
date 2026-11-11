@@ -1,6 +1,5 @@
 """
 MediaCompile — Rate Limiting & Throttling Classes.
-Source of Truth: MediaCompile-prompt.md (Section 20: Phase 10 — Security & Rate Limiting)
 
 Scoped rate limits backed by Redis cache:
 - ingestion: 120/minute (protects CPU & background queue during URL/doc ingestion)

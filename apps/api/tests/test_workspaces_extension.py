@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 9 Tests: Workspaces, Topic Dashboards, Bulk Export/Import & Browser Extension Flow.
-Source of Truth: MediaCompile-prompt.md (Section 19: Phase 9)
 
 Tests:
 1. WebClipAPIView: Browser extension clipping, SSRF rejection, and deduplication.

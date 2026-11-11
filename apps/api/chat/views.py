@@ -1,6 +1,5 @@
 """
 MediaCompile — Chat Views and RAG API Endpoints.
-Source of Truth: MediaCompile-prompt.md (Section 16: Phase 6 — Grounded AI Chat)
 
 Enforces:
 1. Multi-Tenant Session Isolation: All sessions filtered by request.user (cross-user access returns 404).

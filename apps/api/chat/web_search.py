@@ -1,6 +1,5 @@
 """
 MediaCompile — Library-First, Web-Second Search & Coverage Evaluation.
-Source of Truth: Phase 2 (Library-First, Web-Second Architecture)
 
 Guarantees:
 1. MediaCompile searches the user's saved knowledge BEFORE initiating external web research.

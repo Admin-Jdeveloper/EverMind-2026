@@ -1,6 +1,5 @@
 """
 MediaCompile — Reddit Authorized API & Export Connector.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Priority 3: Reddit Connector)
 
 Features:
 1. Official Reddit OAuth read connector (`identity,read,history`).

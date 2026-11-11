@@ -1,6 +1,5 @@
 """
 MediaCompile — Dedicated YouTube Ingestion, Metadata Extraction, and Transcript Processing.
-Source of Truth: MediaCompile-prompt.md (Section 7: Phase Three — Build reliable YouTube ingestion)
 
 Features:
 1. URL Detection & Normalization:

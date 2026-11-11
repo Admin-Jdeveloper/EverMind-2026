@@ -21,7 +21,6 @@ const ThemeContext = React.createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<Theme>('dark');
   const [resolvedTheme, setResolvedTheme] = React.useState<'dark' | 'light'>('dark');
-  const [mounted, setMounted] = React.useState(false);
 
   const applyTheme = React.useCallback((t: Theme) => {
     const root = document.documentElement;
@@ -46,7 +45,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    setMounted(true);
     const stored = localStorage.getItem('mc_theme') as Theme | null;
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       setThemeState(stored);

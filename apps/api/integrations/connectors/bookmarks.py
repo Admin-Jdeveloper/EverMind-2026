@@ -1,6 +1,5 @@
 """
 MediaCompile — Browser Bookmark Import Connector.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Priority 1: Manual URL saving & browser bookmark import)
 
 Supports:
 1. Standard Netscape HTML Bookmark exports (Chrome, Firefox, Safari, Edge, Brave).

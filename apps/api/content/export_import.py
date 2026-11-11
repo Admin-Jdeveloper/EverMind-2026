@@ -1,6 +1,5 @@
 """
 MediaCompile — Library Export and Bulk Import Service.
-Source of Truth: MediaCompile-prompt.md (Section 19: Phase 9 — Export correctness & import round-trips)
 
 Enforces:
 1. Strict User Isolation: Exports only the authenticated user's private items, memories, and chat history.

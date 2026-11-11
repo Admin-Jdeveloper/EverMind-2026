@@ -1,6 +1,5 @@
 """
 MediaCompile — 15-Point Chatbot Architecture & Reliability Evaluation Suite.
-Source of Truth: MediaCompile-prompt.md (Step 10: Evaluate the actual system)
 
 Covers all 15 required evaluation points:
 1. Exact DOB retrieval.

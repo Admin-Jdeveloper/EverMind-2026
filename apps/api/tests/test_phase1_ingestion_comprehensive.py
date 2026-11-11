@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 1 Acceptance Test Gate: Reliable Content Ingestion
-Source of Truth: MediaCompile Autonomous RAG Engineering Master Prompt (Phase 1)
 
 Verifies:
 1. Valid PDFs with known page content.

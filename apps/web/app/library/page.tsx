@@ -2,12 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Search,
   LayoutGrid,
   List as ListIcon,
-  Upload,
   Link as LinkIcon,
   FileText,
   UploadCloud,
@@ -15,18 +13,14 @@ import {
   ArrowRight,
   MoreHorizontal,
   Trash2,
-  Edit2,
   Eye,
   RotateCcw,
-  Sparkles,
   Loader2,
-  CheckCircle2,
   AlertCircle,
   ExternalLink,
   Plus,
   Download,
-  Check,
-  X
+  Check
 } from 'lucide-react';
 import { ShellLayout } from '@/components/shell/shell-layout';
 import { Modal } from '@/components/ui/modal';
@@ -35,7 +29,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   getCanonicalContentMeta,
-  CanonicalType,
   FormattedContentMeta
 } from '@/lib/content-utils';
 
@@ -186,7 +179,6 @@ function renderStatusBadge(status: string, errorMessage?: string) {
 }
 
 export default function LibraryPage() {
-  const router = useRouter();
   const [items, setItems] = React.useState<LibraryItem[]>([]);
   const [collections, setCollections] = React.useState<Array<{ id: string; name: string }>>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -328,7 +320,7 @@ export default function LibraryPage() {
         if (anyTerminal) {
           fetchItems(true);
         }
-      } catch (err) {
+      } catch {
         // Silently tolerate transient poll errors
       }
     }, 4000);

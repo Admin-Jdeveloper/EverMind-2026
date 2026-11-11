@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 7: Personalization and User-Controlled Memory Test Suite.
-Source of Truth: MediaCompile-prompt.md (Section 17: Phase 7 — Personalization and User-Controlled Memory)
 
 Validates:
 1. Memory Sovereignty (CRUD): Create, list, edit, toggle active status, and delete memory items.

@@ -1,6 +1,5 @@
 """
 MediaCompile — Structured Fact Extraction, Indexing, and Conflict Detection.
-Source of Truth: MediaCompile-prompt.md (Step 3, Step 4, Step 5)
 
 Responsibilities:
 1. Deterministic Extraction: Extracts exact dates, DOB, currency amounts, identifiers (passport, SSN, invoices),
@@ -296,7 +295,7 @@ def index_item_facts(item: ContentItem, chunks: List[ContentChunk]) -> List[Cont
             ContentFact.objects.bulk_create(fact_objs)
 
     logger.info(
-        f"[DIAGNOSTIC] Extracted and indexed {len(fact_objs)} facts for item {item.id} (user {item.user_id})"
+        f"Extracted and indexed {len(fact_objs)} facts for item {item.id} (user {item.user_id})"
     )
     return fact_objs
 

@@ -1,6 +1,5 @@
 """
 MediaCompile — Content Views and Ingestion API Endpoints.
-Source of Truth: MediaCompile-prompt.md (Section 14: Processing Pipeline & Endpoints)
 
 Enforces:
 1. Strict server-side authorization: all querysets filtered by request.user.
@@ -157,28 +156,10 @@ class ContentItemViewSet(viewsets.ModelViewSet):
                 try:
                     delete_file(instance.file_key)
                 except Exception as e:
-                    logger.warning(f"Could not delete MinIO file {instance.file_key}: {e}")
+                    logger.warning(f"Could not delete storage file {instance.file_key}: {e}")
             instance.delete()
-            logger.info(f"[DELETION] ContentItem {item_id} and {chunk_count} associated chunks completely purged.")
+            logger.info(f"ContentItem {item_id} and {chunk_count} associated chunks purged.")
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-    def perform_destroy(self, instance):
-        with transaction.atomic():
-            # 1. Explicitly purge associated chunks and embeddings
-            chunk_count = instance.chunks.count()
-            instance.chunks.all().delete()
-
-            # 2. If object has an associated file in MinIO, remove it safely
-            if instance.file_key:
-                try:
-                    delete_file(instance.file_key)
-                except Exception as e:
-                    logger.warning(f"Could not delete MinIO file {instance.file_key}: {e}")
-
-            # 3. Delete parent content item
-            item_id = str(instance.id)
-            instance.delete()
-            logger.info(f"[DELETION] ContentItem {item_id} and {chunk_count} associated chunks completely purged.")
 
     @action(detail=False, methods=['post'], url_path='bulk-delete')
     def bulk_delete(self, request):

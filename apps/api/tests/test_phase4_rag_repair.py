@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 4: Chatbot and RAG Retrieval Repair Test Suite.
-Source of Truth: MediaCompile-prompt.md (Phase 4: Chatbot and RAG Retrieval Repair)
 
 Validates:
 1. Distinctive Public Article Test:

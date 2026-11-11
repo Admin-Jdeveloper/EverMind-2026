@@ -1,6 +1,5 @@
 """
 MediaCompile — Chat Serializers.
-Source of Truth: MediaCompile-prompt.md (Section 16: Phase 6 — Grounded AI Chat)
 """
 
 from rest_framework import serializers

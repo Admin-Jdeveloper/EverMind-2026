@@ -1,6 +1,5 @@
 """
 MediaCompile — Conversational Query Planner and Reference Resolver.
-Source of Truth: Chatbot_architecture_recall.md (Section 1: Steps 3-5, Section 2: Sequences A-E)
 
 Responsibilities:
 1. Classifies user query: Standalone vs Follow-Up (Ordinal reference, Page locator, Anaphora, Expansion, Comparison, Ambiguous).
@@ -45,30 +44,6 @@ GENERIC_WORDS = {
     "describe", "summary", "summarize", "document", "article", "note", "paper",
     "deep", "dive", "session", "exploration", "test", "ambiguity", "numbered"
 }
-
-
-def extract_salient_entities(history: List[Dict[str, str]], session_title: str = "") -> List[str]:
-    """Extract key entity and topic nouns from recent conversation history."""
-    entities = []
-
-    # Check last user and assistant turns FIRST (most authoritative)
-    for turn in reversed(history[-4:]):
-        content = turn.get("content", "")
-        # Find capitalized words or acronyms (e.g. "Raft", "MVCC", "TCP", "Kafka", "Paxos")
-        matches = re.findall(r'\b[A-Z][a-zA-Z0-9_-]{1,}\b', content)
-        for m in matches:
-            if m.lower() not in GENERIC_WORDS and m not in entities:
-                entities.append(m)
-
-    # Check session title only as fallback if no entities found in conversation
-    if not entities and session_title and session_title.lower() not in ("new conversation", "new chat", "untitled"):
-        for word in session_title.split():
-            clean = word.strip(".,?!:;\"'()")
-            if len(clean) >= 3 and clean.lower() not in GENERIC_WORDS:
-                if clean not in entities:
-                    entities.append(clean)
-
-    return entities
 
 
 @dataclass

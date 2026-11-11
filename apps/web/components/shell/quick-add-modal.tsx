@@ -7,9 +7,7 @@ import {
   UploadCloud,
   Check,
   AlertCircle,
-  Folder,
-  Loader2,
-  X
+  Loader2
 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';

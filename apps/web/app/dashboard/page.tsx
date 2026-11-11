@@ -2,10 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
-  Upload,
-  Play,
   Sparkles,
   ArrowRight,
   FileText,
@@ -17,7 +14,6 @@ import {
   Plus,
   ChevronRight,
   Loader2,
-  ExternalLink,
   AlertCircle,
   RotateCcw
 } from 'lucide-react';
@@ -48,13 +44,11 @@ const pastelBgPalette = [
 ];
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [recentRawItems, setRecentRawItems] = React.useState<any[]>([]);
   const [collections, setCollections] = React.useState<CollectionItem[]>([]);
   const [recentChats, setRecentChats] = React.useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
-  const [isAuthError, setIsAuthError] = React.useState(false);
 
   // Trigger quick add modal
   const openQuickAdd = (tab?: 'document' | 'link' | 'note') => {
@@ -72,13 +66,11 @@ export default function DashboardPage() {
 
       if (itemsRes.ok) {
         setFetchError(null);
-        setIsAuthError(false);
         const itemsData = await itemsRes.json();
         const list = Array.isArray(itemsData) ? itemsData : itemsData.results || [];
         setRecentRawItems(list.slice(0, 6));
       } else {
         if (itemsRes.status === 401 || itemsRes.status === 403) {
-          setIsAuthError(true);
           setFetchError('Session expired or unauthorized.');
         } else {
           setFetchError('Unable to load content library items.');
@@ -169,7 +161,7 @@ export default function DashboardPage() {
         if (anyTerminal) {
           loadData(true);
         }
-      } catch (err) {
+      } catch {
         // Silently tolerate transient poll errors
       }
     }, 4000);

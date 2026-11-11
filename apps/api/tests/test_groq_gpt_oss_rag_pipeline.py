@@ -1,6 +1,5 @@
 """
 MediaCompile — Comprehensive Regression Test Suite for Groq GPT-OSS 120B + RAG Architecture.
-Source of Truth: MediaCompile Target Architecture & Phase 2 Specifications
 
 Validates all 17 Required Regression Criteria:
 1. "What is Redis?" returns a general answer with an empty library.

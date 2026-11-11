@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 8: Social and External Integrations Test Suite.
-Source of Truth: MediaCompile-prompt.md (Section 18: Social and External Integrations)
 
 Validates:
 1. Token Encryption & Redaction: Credentials encrypted with Fernet at rest, never leaked in API output.

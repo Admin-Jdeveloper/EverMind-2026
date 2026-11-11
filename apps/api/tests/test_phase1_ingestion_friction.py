@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 1: Upload Friction & Ingestion Simplification Test Suite.
-Source of Truth: Phase 1 Specifications & MediaCompile-prompt.md
 
 Validates:
 1. Every supported document format (PDF, DOCX, PPTX, XLSX, CSV, TXT, MD) uploads and ingests.

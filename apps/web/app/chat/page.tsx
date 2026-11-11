@@ -14,8 +14,6 @@ import {
   ExternalLink,
   Loader2,
   FileText,
-  Link as LinkIcon,
-  StickyNote,
   MessageSquare,
   Globe
 } from 'lucide-react';

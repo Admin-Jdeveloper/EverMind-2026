@@ -39,7 +39,7 @@ class TestGroqLLMProviderConfig:
     def test_default_configuration(self):
         provider = GroqLLMProvider(api_key="gsk_testkey123")
         assert provider.model_name == "openai/gpt-oss-120b"
-        assert provider.base_url == "https://api.groq.com/openai/v1"
+        assert provider.base_url == DEFAULT_GROQ_BASE_URL
         assert provider.api_key == "gsk_testkey123"
         # Confirm no reference to OpenAI endpoint
         assert "api.openai.com" not in provider.base_url
@@ -75,6 +75,7 @@ class TestGroqResponseGeneration:
 
         mock_choice = MagicMock()
         mock_choice.message.content = "Grounded answer about vector databases [Source 1]."
+        mock_choice.message.tool_calls = None
         mock_completion = MagicMock()
         mock_completion.choices = [mock_choice]
         mock_client.chat.completions.create.return_value = mock_completion

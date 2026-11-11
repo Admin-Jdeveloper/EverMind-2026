@@ -8,11 +8,7 @@ import {
   Laptop,
   Trash2,
   AlertTriangle,
-  Check,
-  Loader2,
-  Database,
-  Layers,
-  Sparkles
+  Check
 } from 'lucide-react';
 import { ShellLayout } from '@/components/shell/shell-layout';
 import { DeleteConfirmationModal } from '@/components/ui/delete-confirmation-modal';

@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Folder,
   Plus,
@@ -11,7 +10,6 @@ import {
   Link as LinkIcon,
   StickyNote,
   Loader2,
-  X,
   ExternalLink,
   MinusCircle
 } from 'lucide-react';
@@ -39,7 +37,6 @@ const folderBgPalette = [
 ];
 
 export default function CollectionsPage() {
-  const router = useRouter();
   const [collections, setCollections] = React.useState<Collection[]>([]);
   const [selectedColId, setSelectedColId] = React.useState<string | null>(null);
   const [allSources, setAllSources] = React.useState<any[]>([]);
@@ -61,7 +58,6 @@ export default function CollectionsPage() {
 
   // Add Source Modal State
   const [isAddSourceOpen, setIsAddSourceOpen] = React.useState(false);
-  const [assigningSourceId, setAssigningSourceId] = React.useState<string | null>(null);
 
   // Delete Collection Modal State
   const [colToDelete, setColToDelete] = React.useState<Collection | null>(null);
@@ -124,14 +120,17 @@ export default function CollectionsPage() {
     return () => window.removeEventListener('mediacompile:content-deleted', handleContentDeleted);
   }, []);
 
-  const selectedCol =
-    collections.find((c) => String(c.id) === selectedColId) ||
-    collections[0] || {
-      id: 'default',
-      name: 'General',
-      description: 'Default collection',
-      item_count: 0,
-    };
+  const selectedCol = React.useMemo(
+    () =>
+      collections.find((c) => String(c.id) === selectedColId) ||
+      collections[0] || {
+        id: 'default',
+        name: 'General',
+        description: 'Default collection',
+        item_count: 0,
+      },
+    [collections, selectedColId]
+  );
 
   // Filter sources belonging to selected collection
   const activeSources = React.useMemo(() => {
@@ -322,7 +321,6 @@ export default function CollectionsPage() {
   // Handle Assign Source to Selected Collection
   const handleAssignSource = async (sourceId: string) => {
     if (!selectedColId) return;
-    setAssigningSourceId(sourceId);
     try {
       const res = await fetch(`/api/v1/content/collections/${selectedColId}/add-item/`, {
         method: 'POST',
@@ -354,8 +352,6 @@ export default function CollectionsPage() {
       }
     } catch (err) {
       console.error('Failed to assign source:', err);
-    } finally {
-      setAssigningSourceId(null);
     }
   };
 

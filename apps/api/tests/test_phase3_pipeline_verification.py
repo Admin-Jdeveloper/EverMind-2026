@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 3: Content Ingestion Pipeline Verification Test Suite.
-Source of Truth: MediaCompile-prompt.md (Phase 3: Content Ingestion Pipeline Verification and Repair)
 
 Verifies:
 1. Multi-Format Extraction: PDF, DOCX, PPTX, XLSX, CSV, Plain Text, Markdown, HTML/URL, and Notes.

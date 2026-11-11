@@ -1,6 +1,5 @@
 """
 MediaCompile — Celery Ingestion Tasks.
-Source of Truth: MediaCompile-prompt.md (Section 14: Processing Pipeline)
 
 Processes URLs, uploaded documents (PDF, TXT, MD), and notes asynchronously.
 Executes on the Windows host using Celery with the -P solo pool.
@@ -147,7 +146,7 @@ def process_youtube_content_internal(task_instance, item: ContentItem):
         item.save(update_fields=['title', 'summary', 'raw_text', 'ingestion_status', 'content_hash', 'metadata', 'error_message'])
 
     logger.info(
-        f"[DIAGNOSTIC] YouTube Ingestion Completed: item_id={item.id}, video_id={video_id}, "
+        f"YouTube Ingestion Completed: item_id={item.id}, video_id={video_id}, "
         f"has_transcript={item.metadata.get('has_transcript')}, chunks={len(chunk_objs)}"
     )
 
@@ -260,17 +259,17 @@ def process_url_content(self, content_item_id: str, allow_test_local: bool = Fal
             item.save(update_fields=['title', 'summary', 'raw_text', 'ingestion_status', 'content_hash', 'error_message', 'metadata'])
 
         logger.info(
-            f"[DIAGNOSTIC] URL Ingestion Completed: item_id={item.id}, user_id={item.user_id}, "
+            f"URL Ingestion Completed: item_id={item.id}, user_id={item.user_id}, "
             f"chunks={len(chunk_objs)}, dims={provider.dimension}, model={provider.model_name}"
         )
 
     except SSRFProtectionError as e:
-        logger.error(f"[DIAGNOSTIC] SSRF violation on {item.source_url}: {e}")
+        logger.error(f"SSRF violation on {item.source_url}: {e}")
         item.ingestion_status = ContentItem.STATUS_FAILED
         item.error_message = f"SSRF Security Violation: {str(e)}"
         item.save(update_fields=['ingestion_status', 'error_message'])
     except Exception as e:
-        logger.exception(f"[DIAGNOSTIC] Error processing URL {item.source_url}: {e}")
+        logger.exception(f"Error processing URL {item.source_url}: {e}")
         item.ingestion_status = ContentItem.STATUS_FAILED
         item.error_message = f"Processing failed: {str(e)}"
         item.save(update_fields=['ingestion_status', 'error_message'])
@@ -388,12 +387,12 @@ def process_document_content(self, content_item_id: str):
             item.save(update_fields=['title', 'raw_text', 'ingestion_status', 'content_hash', 'error_message', 'metadata'])
 
         logger.info(
-            f"[DIAGNOSTIC] Document Ingestion Completed: item_id={item.id}, user_id={item.user_id}, "
+            f"Document Ingestion Completed: item_id={item.id}, user_id={item.user_id}, "
             f"chunks={len(chunk_objs)}, dims={provider.dimension}, model={provider.model_name}"
         )
 
     except Exception as e:
-        logger.exception(f"[DIAGNOSTIC] Error processing document {item.file_key}: {e}")
+        logger.exception(f"Error processing document {item.file_key}: {e}")
         item.ingestion_status = ContentItem.STATUS_FAILED
         item.error_message = f"Document processing failed: {str(e)}"
         item.save(update_fields=['ingestion_status', 'error_message'])
@@ -474,11 +473,11 @@ def process_note_content(self, content_item_id: str):
             item.save(update_fields=['ingestion_status', 'content_hash', 'error_message', 'metadata'])
 
         logger.info(
-            f"[DIAGNOSTIC] Note Ingestion Completed: item_id={item.id}, user_id={item.user_id}, "
+            f"Note Ingestion Completed: item_id={item.id}, user_id={item.user_id}, "
             f"chunks={len(chunk_objs)}, dims={provider.dimension}, model={provider.model_name}"
         )
     except Exception as e:
-        logger.exception(f"[DIAGNOSTIC] Error processing note {item.id}: {e}")
+        logger.exception(f"Error processing note {item.id}: {e}")
         item.ingestion_status = ContentItem.STATUS_FAILED
         item.error_message = f"Note processing failed: {str(e)}"
         item.save(update_fields=['ingestion_status', 'error_message'])
@@ -535,15 +534,15 @@ def generate_chunk_embeddings(self, chunk_ids: list):
                 chunk.save(update_fields=['embedding', 'metadata'])
 
         logger.info(
-            f"[DIAGNOSTIC] Embeddings generated for {len(chunks)} chunks: "
+            f"Embeddings generated for {len(chunks)} chunks: "
             f"dims={provider.dimension}, model={provider.model_name}"
         )
     except Exception as e:
-        logger.exception(f"[DIAGNOSTIC] Failed to generate chunk embeddings: {e}")
+        logger.exception(f"Failed to generate chunk embeddings: {e}")
         try:
             self.retry(exc=e)
         except (self.MaxRetriesExceededError, AttributeError):
-            logger.error(f"[DIAGNOSTIC] Exceeded max retries generating embeddings for chunks: {chunk_ids}")
+            logger.error(f"Exceeded max retries generating embeddings for chunks: {chunk_ids}")
 
 @shared_task(ignore_result=True)
 def reembed_user_content(user_id: str):

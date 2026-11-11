@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 6: Final End-to-End Integration & Regression Test Suite.
-Source of Truth: MediaCompile-prompt.md (Phase 6: Final Integration and Regression Testing)
 
 Validates complete user journey:
 1. Authentication: Register new users and authenticate clients.
@@ -221,7 +220,7 @@ def test_end_to_end_multitenant_isolation(client_alice, client_bob, e2e_users):
 @pytest.mark.django_db
 def test_distinctive_article_final_acceptance_gate(client_alice, e2e_users):
     """
-    Definitive acceptance test from MediaCompile-prompt.md:
+    End-to-end acceptance test:
     1. Ingest a distinctive public article on a specific scientific discovery.
     2. Query factual question uniquely answered by the article.
     3. Verify authoritative answer with valid source citation.

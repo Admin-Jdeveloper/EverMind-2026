@@ -1,6 +1,5 @@
 """
 MediaCompile — Security Audit Logging Service.
-Source of Truth: MediaCompile-prompt.md (Section 20: Phase 10 — Security & Audit)
 
 Provides a centralized mechanism to log security-sensitive events with minimal metadata
 and zero credential/secret leakage.

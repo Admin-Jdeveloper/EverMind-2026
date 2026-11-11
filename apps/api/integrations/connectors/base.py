@@ -1,6 +1,5 @@
 """
 MediaCompile — Base Social and External Connector Interface.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Social and External Integrations)
 """
 
 from abc import ABC, abstractmethod

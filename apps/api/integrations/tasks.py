@@ -1,6 +1,5 @@
 """
 MediaCompile — Celery Background Tasks for Social and External Integrations.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Tasks per connector)
 
 Enforces:
 1. Asynchronous execution on Celery solo worker (Windows compatible).

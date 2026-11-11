@@ -1,6 +1,5 @@
 """
 MediaCompile — Hybrid Search & Retrieval Engine with Structured Fact Fusion.
-Source of Truth: MediaCompile-prompt.md (Step 4: Hybrid Retrieval, Step 5: Structured Facts)
 
 Features:
 1. Multi-Tenant Isolation: Strictly user-scoped (content_item__user=user).
@@ -210,7 +209,7 @@ def lexical_search_chunks(
             .distinct()[:limit]
         )
     except DatabaseError as e:
-        logger.error(f"[DIAGNOSTIC] Database error during lexical search: {e}", exc_info=True)
+        logger.error(f"Database error during lexical search: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Database error during lexical retrieval: {e}") from e
 
     # Score and rank matching chunks by term occurrence density
@@ -235,7 +234,7 @@ def lexical_search_chunks(
         })
 
     logger.info(
-        f"[DIAGNOSTIC] Lexical search: user={user.id}, query='{query_text[:50]}', "
+        f"Lexical search: user={user.id}, query='{query_text[:50]}', "
         f"matches_found={len(results)}"
     )
     return results
@@ -258,10 +257,10 @@ def vector_search_chunks(
         provider = get_embedding_provider()
         query_vector = provider.embed_text(query_text.strip())
     except EmbeddingError as e:
-        logger.error(f"[DIAGNOSTIC] Embedding service failure: {e}", exc_info=True)
+        logger.error(f"Embedding service failure: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Embedding service failure: {e}") from e
     except Exception as e:
-        logger.error(f"[DIAGNOSTIC] Unexpected embedding provider failure: {e}", exc_info=True)
+        logger.error(f"Unexpected embedding provider failure: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Embedding service failure: {e}") from e
 
     try:
@@ -278,7 +277,7 @@ def vector_search_chunks(
             .prefetch_related('content_item__tags')[:limit]
         )
     except DatabaseError as e:
-        logger.error(f"[DIAGNOSTIC] Database error during vector search: {e}", exc_info=True)
+        logger.error(f"Database error during vector search: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Database error during vector retrieval: {e}") from e
 
 
@@ -297,7 +296,7 @@ def vector_search_chunks(
     top_sim = results[0]["similarity"] if results else "N/A"
     top_chunk_id = str(results[0]["chunk"].id) if results else "None"
     logger.info(
-        f"[DIAGNOSTIC] Vector search: user={user.id}, query='{query_text[:50]}', "
+        f"Vector search: user={user.id}, query='{query_text[:50]}', "
         f"candidates={len(chunks_with_distance)}, min_similarity={min_similarity}, "
         f"returned={len(results)}, top_similarity={top_sim}, top_chunk_id={top_chunk_id}"
     )
@@ -339,7 +338,7 @@ def hybrid_retrieve_with_facts(
     try:
         facts_list, conflict_report = find_facts_for_query(user, clean_query)
     except DatabaseError as e:
-        logger.error(f"[DIAGNOSTIC] Database error during fact search: {e}", exc_info=True)
+        logger.error(f"Database error during fact search: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Database error during fact retrieval: {e}") from e
 
     # Step 2: Lexical & Vector Search
@@ -415,7 +414,7 @@ def hybrid_retrieve_with_facts(
                     if "exact_title" not in chunk_data_map[cid]["modes"]:
                         chunk_data_map[cid]["modes"].insert(0, "exact_title")
     except Exception as e:
-        logger.warning(f"[DIAGNOSTIC] Error during exact title boost: {e}")
+        logger.warning(f"Error during exact title boost: {e}")
 
     # Map structured fact boosts
     for fact in facts_list:
@@ -478,7 +477,7 @@ def hybrid_retrieve_with_facts(
     if not sorted_entries and filters.get("page_number") is not None:
         relaxed_filters = dict(filters)
         relaxed_filters.pop("page_number", None)
-        logger.info(f"[DIAGNOSTIC] Page-specific search returned 0 matches, relaxing page filter for query: '{clean_query[:50]}'")
+        logger.info(f"Page-specific search returned 0 matches, relaxing page filter for query: '{clean_query[:50]}'")
         return hybrid_retrieve_with_facts(
             user=user,
             query_text=query_text,
@@ -511,7 +510,7 @@ def hybrid_retrieve_with_facts(
         formatted_results = rerank_candidates(clean_query, formatted_results, enabled=True)
 
     logger.info(
-        f"[DIAGNOSTIC] Hybrid RRF search: user={user.id}, query='{clean_query[:50]}', "
+        f"Hybrid RRF search: user={user.id}, query='{clean_query[:50]}', "
         f"facts_found={len(facts_list)}, conflict={bool(conflict_report)}, "
         f"lex_hits={len(lex_results)}, vec_hits={len(vec_results)}, returned={len(formatted_results)}"
     )
@@ -770,10 +769,10 @@ def get_authoritative_library_stats(user) -> Dict[str, Any]:
             "items_summary": items_summary
         }
     except DatabaseError as e:
-        logger.error(f"[DIAGNOSTIC] Database error while retrieving library stats for user {user.id}: {e}", exc_info=True)
+        logger.error(f"Database error while retrieving library stats for user {user.id}: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Database error while querying saved library stats: {e}") from e
     except Exception as e:
-        logger.error(f"[DIAGNOSTIC] Unexpected error while retrieving library stats for user {user.id}: {e}", exc_info=True)
+        logger.error(f"Unexpected error while retrieving library stats for user {user.id}: {e}", exc_info=True)
         raise RetrievalInfrastructureError(f"Failed to query saved library stats: {e}") from e
 
 

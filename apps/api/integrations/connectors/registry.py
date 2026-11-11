@@ -1,6 +1,5 @@
 """
 MediaCompile — Connector Registry & Third-Party Policy Service.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Social and External Integrations)
 """
 
 from typing import Dict, Any, List, Optional

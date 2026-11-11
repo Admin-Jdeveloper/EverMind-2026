@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 3 Acceptance Test Gate: Grounded Generation, Citations, Streaming, and Reliability
-Source of Truth: MediaCompile Autonomous RAG Engineering Master Prompt (Phase 3)
 
 Verifies:
 1. Grounded answer correctness.

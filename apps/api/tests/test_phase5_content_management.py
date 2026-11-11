@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 5: Content Management Test Suite.
-Source of Truth: MediaCompile-prompt.md (Phase 5: Content Management Implementation)
 
 Validates:
 1. View item details: title, type, status, source URL / file info, chunk count, raw text preview, chunks list.

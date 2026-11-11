@@ -1,6 +1,5 @@
 """
 MediaCompile — Provider-Neutral LLM Service (Groq API Integration).
-Source of Truth: MediaCompile-prompt.md (Step 4, Step 6, Step 7)
 
 Architecture:
 - Primary Provider: GroqLLMProvider using official Groq SDK.

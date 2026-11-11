@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 0 Acceptance Test Gate: Context-Aware Chatbot Foundation
-Source of Truth: MediaCompile Autonomous RAG Engineering Master Prompt (Phase 0)
 
 Verifies:
 1. Direct factual questions.

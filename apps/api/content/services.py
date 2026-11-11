@@ -1,6 +1,5 @@
 """
 MediaCompile — Multi-Format Text Extraction, Normalization, and Chunking Engine.
-Source of Truth: MediaCompile-prompt.md (Section 1: Supported Content Types & Section 2: Pipeline)
 
 Supported Formats:
 - PDF (pypdf): Preserves page numbers for source citations.

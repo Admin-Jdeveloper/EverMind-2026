@@ -1,6 +1,5 @@
 """
 MediaCompile — Integrations REST Views.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Social and External Integrations)
 
 Enforces:
 1. Multi-Tenant Isolation: Users can view, sync, and disconnect only their own accounts.

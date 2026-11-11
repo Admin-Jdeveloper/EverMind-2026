@@ -1,6 +1,5 @@
 """
 MediaCompile — User Memory & Personalization Management Service.
-Source of Truth: MediaCompile-prompt.md (Section 17: Personalization and User-Controlled Memory)
 
 Features:
 1. User Memory Sovereignty: Add, list, edit, disable, and delete memories.

@@ -1,6 +1,5 @@
 """
 MediaCompile — Grounded RAG Chat Orchestration Service.
-Source of Truth: MediaCompile-prompt.md (Step 4, Step 6, Step 7)
 
 Enforces:
 1. Retrieval Grounding: Hybrid RRF retrieval filtered strictly by authenticated user.
@@ -162,54 +161,6 @@ Previous conversation messages provide conversational context for follow-up ques
 {context_body}
 --- RETRIEVED CONTEXT END ---
 """
-
-
-def resolve_conversational_query(question: str, session: Any = None) -> str:
-    """
-    Resolve coreferences, pronouns, and topic context for follow-up questions.
-    Example:
-    - User asks: 'Who is Alice?' -> 'Alice is a researcher.'
-    - User asks: 'When was she born?' -> enriched query: 'Alice when was she born DOB date of birth'
-    """
-    clean_q = question.strip()
-    if not session:
-        return clean_q
-
-    pronouns = {"it", "they", "them", "these", "those", "she", "he", "her", "him", "its", "their", "again", "that", "date"}
-    tokens = set(re.findall(r'\b[a-zA-Z]+\b', clean_q.lower()))
-
-    needs_enrichment = bool(tokens & pronouns) or len(clean_q.split()) <= 4
-
-    if not needs_enrichment:
-        return clean_q
-
-    # Inspect last user message and assistant message to extract salient entity/nouns
-    past_msgs = list(session.messages.order_by('-created_at')[:3])
-    entity_terms = []
-
-    for m in past_msgs:
-        content = m.content
-        # Find capitalized words or key entities
-        entities = re.findall(r'\b[A-Z][a-z0-9_]{2,}\b', content)
-        for ent in entities:
-            if ent.lower() not in ("source", "media", "compile", "page", "slide", "based", "according", "hello", "hi"):
-                if ent not in entity_terms:
-                    entity_terms.append(ent)
-        if entity_terms:
-            break
-
-    session_title = getattr(session, 'title', '')
-    title_terms = []
-    if session_title and session_title not in ("New Conversation", "New Chat", "Untitled"):
-        title_terms = [w for w in session_title.split() if len(w) >= 3 and w.lower() not in ("new", "conversation", "chat")]
-
-    context_prefix = " ".join(entity_terms[:2] or title_terms[:3])
-    if context_prefix and context_prefix.lower() not in clean_q.lower():
-        enriched = f"{context_prefix} {clean_q}"
-        logger.info(f"[DIAGNOSTIC] Enriched follow-up query: '{clean_q}' -> '{enriched}'")
-        return enriched
-
-    return clean_q
 
 
 def is_authoritative_count_or_inventory_query(question: str) -> Tuple[bool, str, Optional[str]]:
@@ -496,7 +447,7 @@ def retrieve_grounding_context(
 
     context_str = "\n\n".join(context_lines)
     logger.info(
-        f"[DIAGNOSTIC] retrieve_grounding_context: user={user.id}, question='{question[:60]}', "
+        f"retrieve_grounding_context: user={user.id}, question='{question[:60]}', "
         f"scope_mode={plan.scope_mode}, target_page={plan.target_page}, target_items={plan.target_item_ids}, "
         f"retrieved_count={len(citations)}, scores={[c['score'] for c in citations]}"
     )
@@ -973,7 +924,7 @@ def generate_chat_turn(
 
     provider = get_llm_provider("groq", decision.model_name)
     logger.info(
-        f"[DIAGNOSTIC] generate_chat_turn request: user={user.id}, session={session.id}, "
+        f"generate_chat_turn request: user={user.id}, session={session.id}, "
         f"answer_source={coverage.answer_source}, routed_provider=groq, "
         f"model={provider.model_name}, is_complex={decision.is_complex}, "
         f"intent={decision.intent_category}, reason='{decision.reason}', "
@@ -1019,7 +970,7 @@ def generate_chat_turn(
     )
 
     logger.info(
-        f"[DIAGNOSTIC] generate_chat_turn response: user={user.id}, session={session.id}, "
+        f"generate_chat_turn response: user={user.id}, session={session.id}, "
         f"answer_source={coverage.answer_source}, response_len={len(assistant_content)}, "
         f"unsure_fallback={UNSURE_FALLBACK_PHRASE in assistant_content}, "
         f"valid_citations={len(citations_to_persist)}, precision={validation_precision}, "

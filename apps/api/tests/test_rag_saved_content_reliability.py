@@ -1,6 +1,5 @@
 """
 Evermind — Grounded RAG Saved-Content Reliability & Authoritative Item Count Tests.
-Source of Truth: PART 2 & PART 3 (RAG Regression Tests, Authoritative Counts, Cross-Tenant Isolation).
 
 Covers:
 1. Genuinely empty account returns zero saved items (no hallucinated zero or fabricated items).

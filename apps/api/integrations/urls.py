@@ -1,6 +1,5 @@
 """
 MediaCompile — Integrations URL Routing.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Social and External Integrations)
 """
 
 from django.urls import path, include

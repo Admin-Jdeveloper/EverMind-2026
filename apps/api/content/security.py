@@ -1,6 +1,5 @@
 """
 MediaCompile — SSRF Protection and Safe HTTP Fetching Layer.
-Source of Truth: MediaCompile-prompt.md (Section 14: Security)
 
 Guarantees:
 1. Scheme validation: strictly http:// and https:// allowed.

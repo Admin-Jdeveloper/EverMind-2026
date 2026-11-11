@@ -1,36 +1,19 @@
 """
-MediaCompile — Provider-Neutral Embedding Service.
-Source of Truth: MediaCompile-prompt.md (Section 4: Embedding Implementation & Section 15: Search, Embeddings, and Retrieval)
+MediaCompile — Embedding Service.
 
-Architecture:
-- Provider-neutral interface supporting 'local' (sentence-transformers/all-MiniLM-L6-v2), 'mock', and 'openai'.
-- Default model: sentence-transformers/all-MiniLM-L6-v2 with EXACTLY 384 dimensions.
-- Server-side environment variables:
-    EMBEDDING_PROVIDER=local
-    EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-    EMBEDDING_DIMENSIONS=384
-- LocalEmbeddingProvider:
-    - Runs all-MiniLM-L6-v2 on CPU using ONNX Runtime and HuggingFace Tokenizers.
-    - Caches the loaded model in-memory (initialize once, reuse).
-    - Mean pooling over token embeddings with attention mask.
-    - Strict L2 unit normalization for pgvector cosine-distance search.
-    - Strictly checks that dimension is exactly 384.
-    - Handles model initialization failures, missing files, and inference errors safely.
-- MockEmbeddingProvider:
-    - Generates deterministic, 384-dimensional unit vectors from token hashes.
-    - Enables 100% offline, zero-cost, deterministic test fixtures.
+Provides a provider-neutral embedding interface supporting:
+- LocalEmbeddingProvider: runs sentence-transformers/all-MiniLM-L6-v2 (384 dimensions)
+  on CPU via ONNX Runtime and HuggingFace Tokenizers with L2 unit normalization.
+- MockEmbeddingProvider: generates deterministic 384-dimensional unit vectors from
+  token hashes for offline testing and fallback environments.
 """
 
-import os
-import math
 import hashlib
 import logging
+import math
+import os
 from pathlib import Path
-from typing import List, Optional, Any
-import urllib.request
-import urllib.error
-import json
-import numpy as np
+from typing import List, Optional
 
 from django.conf import settings
 
@@ -42,16 +25,15 @@ DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 class EmbeddingError(Exception):
     """Raised when embedding generation fails."""
-    pass
 
 
 class EmbeddingDimensionMismatchError(EmbeddingError):
     """Raised when generated embedding dimension doesn't match expected dimension."""
-    pass
 
 
 class BaseEmbeddingProvider:
     """Abstract base class for embedding providers."""
+
     def __init__(self, model_name: str = DEFAULT_MODEL, dimension: int = DEFAULT_DIMENSION):
         self.model_name = model_name
         self.dimension = dimension
@@ -66,26 +48,21 @@ class BaseEmbeddingProvider:
 class MockEmbeddingProvider(BaseEmbeddingProvider):
     """
     Deterministic mock embedding provider.
-    Generates repeatable, unit-normalized vectors based on token hashes.
-    Texts with similar tokens will yield higher cosine similarity than dissimilar texts.
-    Default dimension: 384.
+    Generates repeatable, unit-normalized 384-dimensional vectors based on token hashes.
     """
+
     def embed_text(self, text: str) -> List[float]:
         if not text:
-            # Return zero vector if text is empty
             return [0.0] * self.dimension
 
         vector = [0.0] * self.dimension
         words = text.lower().split()
 
-        # Distribute hash weights across dimensions based on word stems
         for idx, word in enumerate(words):
             h = int(hashlib.sha256(word.encode('utf-8')).hexdigest(), 16)
             dim_index = h % self.dimension
-            # Apply diminishing weight for repeated appearances
             vector[dim_index] += 1.0 / math.sqrt(idx + 1)
 
-        # Normalize to unit length for cosine similarity
         norm = math.sqrt(sum(v * v for v in vector))
         if norm > 0:
             vector = [round(v / norm, 6) for v in vector]
@@ -104,10 +81,10 @@ class MockEmbeddingProvider(BaseEmbeddingProvider):
 
 class LocalEmbeddingProvider(BaseEmbeddingProvider):
     """
-    Local embedding provider executing sentence-transformers/all-MiniLM-L6-v2 (384 dimensions).
-    Uses ONNX Runtime and Tokenizers on Windows CPU.
-    Singleton pattern: initializes model session once and reuses it across calls.
+    Local embedding provider executing sentence-transformers/all-MiniLM-L6-v2 (384 dimensions)
+    via ONNX Runtime and HuggingFace Tokenizers on CPU.
     """
+
     def __init__(self, model_name: str = DEFAULT_MODEL, dimension: int = DEFAULT_DIMENSION):
         super().__init__(model_name=model_name, dimension=dimension)
         self._session = None
@@ -116,7 +93,7 @@ class LocalEmbeddingProvider(BaseEmbeddingProvider):
         self._initialize_model()
 
     def _get_model_paths(self) -> tuple[Optional[Path], Optional[Path]]:
-        """Look for local ONNX model and tokenizer files across standard project cache locations."""
+        """Locate local ONNX model and tokenizer files across standard cache directories."""
         base_dir = getattr(settings, 'BASE_DIR', Path(__file__).resolve().parent.parent)
         candidates = [
             Path(base_dir) / 'models' / 'all-MiniLM-L6-v2',
@@ -131,7 +108,6 @@ class LocalEmbeddingProvider(BaseEmbeddingProvider):
             if tok.exists() and mod.exists():
                 return tok, mod
 
-        # Check if tokenizer exists in any candidate
         for c in candidates:
             tok = c / 'tokenizer.json'
             if tok.exists():
@@ -155,14 +131,13 @@ class LocalEmbeddingProvider(BaseEmbeddingProvider):
                 opts = ort.SessionOptions()
                 opts.intra_op_num_threads = 2
                 self._session = ort.InferenceSession(str(model_path), sess_options=opts, providers=['CPUExecutionProvider'])
-                logger.info("Successfully loaded local ONNX embedding model: %s", self.model_name)
+                logger.info("Loaded local ONNX embedding model: %s", self.model_name)
             else:
                 logger.info(
-                    "Local embedding ONNX model files not found at expected paths. "
-                    "Operating with deterministic 384-dimensional unit vector provider."
+                    "Local ONNX model files not found at expected paths; using deterministic 384-dim unit vector provider."
                 )
         except Exception as e:
-            logger.warning("Local embedding model initialization encountered error: %s. Using fallback.", e)
+            logger.warning("Local embedding model initialization failed (%s); using fallback.", e)
             self._session = None
             self._tokenizer = None
 
@@ -174,7 +149,6 @@ class LocalEmbeddingProvider(BaseEmbeddingProvider):
         if not texts:
             return []
 
-        # If ONNX session is available, execute real transformer inference
         if self._session is not None and self._tokenizer is not None:
             try:
                 import numpy as np
@@ -192,21 +166,18 @@ class LocalEmbeddingProvider(BaseEmbeddingProvider):
                     'token_type_ids': token_type_ids
                 })
 
-                # outputs[0] has shape (batch_size, seq_len, 384)
                 last_hidden_state = outputs[0]
 
-                # Mean pooling with attention mask
+                # Mean pooling over non-masked tokens followed by L2 unit normalization
                 mask_expanded = np.expand_dims(attention_mask, -1).astype(float)
                 sum_embeddings = np.sum(last_hidden_state * mask_expanded, axis=1)
                 sum_mask = np.clip(mask_expanded.sum(axis=1), a_min=1e-9, a_max=None)
                 mean_pooled = sum_embeddings / sum_mask
 
-                # Strict L2 normalization
                 norms = np.linalg.norm(mean_pooled, axis=1, keepdims=True)
                 norms = np.clip(norms, a_min=1e-9, a_max=None)
                 normalized = (mean_pooled / norms).tolist()
 
-                # Verify dimension
                 for vec in normalized:
                     if len(vec) != self.dimension:
                         raise EmbeddingDimensionMismatchError(
@@ -214,60 +185,9 @@ class LocalEmbeddingProvider(BaseEmbeddingProvider):
                         )
                 return normalized
             except Exception as e:
-                logger.error("ONNX inference failed: %s. Falling back to deterministic unit vector provider.", e)
+                logger.error("ONNX inference failed (%s); falling back to deterministic vector provider.", e)
 
-        # Fallback to deterministic 384-dimensional unit vectors
         return self._fallback_provider.embed_batch(texts)
-
-
-class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
-    """
-    OpenAI embedding provider (e.g. text-embedding-3-small).
-    Requires OPENAI_API_KEY.
-    """
-    def __init__(self, api_key: Optional[str] = None, model_name: str = DEFAULT_MODEL, dimension: int = DEFAULT_DIMENSION):
-        super().__init__(model_name=model_name, dimension=dimension)
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
-
-    def embed_text(self, text: str) -> List[float]:
-        results = self.embed_batch([text])
-        return results[0]
-
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        if not self.api_key:
-            raise EmbeddingError("OPENAI_API_KEY is not configured in environment.")
-
-        cleaned_texts = [t.replace("\n", " ") for t in texts]
-        payload = json.dumps({
-            "input": cleaned_texts,
-            "model": self.model_name,
-            "dimensions": self.dimension
-        }).encode('utf-8')
-
-        req = urllib.request.Request(
-            "https://api.openai.com/v1/embeddings",
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-        )
-
-        try:
-            with urllib.request.urlopen(req, timeout=15) as res:
-                data = json.loads(res.read().decode('utf-8'))
-                embeddings = [item["embedding"] for item in data["data"]]
-                for vec in embeddings:
-                    if len(vec) != self.dimension:
-                        raise EmbeddingDimensionMismatchError(
-                            f"OpenAI returned vector of length {len(vec)}, expected {self.dimension}"
-                        )
-                return embeddings
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode('utf-8', errors='replace')
-            raise EmbeddingError(f"OpenAI API error ({e.code}): {err_body}") from e
-        except Exception as e:
-            raise EmbeddingError(f"OpenAI embedding request failed: {str(e)}") from e
 
 
 _CACHED_PROVIDER: Optional[BaseEmbeddingProvider] = None
@@ -275,12 +195,7 @@ _CACHED_PROVIDER: Optional[BaseEmbeddingProvider] = None
 
 def get_embedding_provider() -> BaseEmbeddingProvider:
     """
-    Factory function returning the configured embedding provider.
-    Reuses singleton provider to avoid redundant model initializations.
-    Reads settings:
-    - EMBEDDING_PROVIDER ('local' | 'mock' | 'openai')
-    - EMBEDDING_MODEL ('sentence-transformers/all-MiniLM-L6-v2')
-    - EMBEDDING_DIMENSIONS (384)
+    Return the configured singleton embedding provider ('local' or 'mock').
     """
     global _CACHED_PROVIDER
 
@@ -300,7 +215,15 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
             dimension = DEFAULT_DIMENSION
         else:
             dimension = int(
-                getattr(settings, "EMBEDDING_DIMENSIONS", getattr(settings, "EMBEDDING_DIMENSION", os.environ.get("EMBEDDING_DIMENSIONS", os.environ.get("EMBEDDING_DIMENSION", str(DEFAULT_DIMENSION)))))
+                getattr(
+                    settings,
+                    "EMBEDDING_DIMENSIONS",
+                    getattr(
+                        settings,
+                        "EMBEDDING_DIMENSION",
+                        os.environ.get("EMBEDDING_DIMENSIONS", os.environ.get("EMBEDDING_DIMENSION", str(DEFAULT_DIMENSION)))
+                    )
+                )
             )
             if dimension == 1536:
                 model_name = DEFAULT_MODEL
@@ -317,9 +240,6 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
                 model_name = DEFAULT_MODEL
                 dimension = DEFAULT_DIMENSION
 
-    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
-
-    # If provider already cached with same configuration, reuse it
     if (
         _CACHED_PROVIDER is not None and
         getattr(_CACHED_PROVIDER, 'dimension', None) == dimension and
@@ -327,13 +247,7 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
     ):
         return _CACHED_PROVIDER
 
-    if provider_type == "openai" and openai_key:
-        _CACHED_PROVIDER = OpenAIEmbeddingProvider(
-            api_key=openai_key,
-            model_name=model_name,
-            dimension=dimension
-        )
-    elif provider_type in ("local", "huggingface", "transformers"):
+    if provider_type in ("local", "huggingface", "transformers"):
         _CACHED_PROVIDER = LocalEmbeddingProvider(
             model_name=model_name,
             dimension=dimension

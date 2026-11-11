@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 10 Tests: Security, Privacy, Reliability & Cross-Tenant Audit Matrix.
-Source of Truth: MediaCompile-prompt.md (Section 20: Phase 10 — Security & Privacy)
 
 Tests:
 1. Security Headers: nosniff, DENY, Referrer-Policy, and Content-Security-Policy on responses.

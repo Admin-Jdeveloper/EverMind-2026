@@ -5,7 +5,7 @@ import { generateInternalApiToken } from "@/lib/identity-token";
 async function proxyRequest(request: NextRequest, { path }: { path: string[] }) {
   const session = await auth();
 
-  let user = session?.user?.email
+  const user = session?.user?.email
     ? {
         id: session.user.id || "authjs-user",
         email: session.user.email,

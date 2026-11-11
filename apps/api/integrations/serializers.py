@@ -1,6 +1,5 @@
 """
 MediaCompile — Integrations Serializers.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Tasks per connector)
 """
 
 from rest_framework import serializers

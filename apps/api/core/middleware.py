@@ -1,6 +1,5 @@
 """
 MediaCompile — Security Headers and Request Audit Middleware.
-Source of Truth: MediaCompile-prompt.md (Section 20: Phase 10 — Security & Privacy)
 
 Implements:
 1. Strict Security Headers: nosniff, DENY frame-ancestors, CSP, Referrer-Policy, Permissions-Policy.

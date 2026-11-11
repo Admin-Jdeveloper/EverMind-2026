@@ -1,6 +1,5 @@
 """
 MediaCompile — Content Serializers.
-Source of Truth: MediaCompile-prompt.md (Section 14: Serializers)
 """
 
 from rest_framework import serializers

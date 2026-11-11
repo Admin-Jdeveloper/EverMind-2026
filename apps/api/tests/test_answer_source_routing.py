@@ -1,6 +1,5 @@
 """
 MediaCompile — Comprehensive Regression Tests for Answer-Source Routing & RAG Failure Fixes.
-Source of Truth: Section 5 (Regression Tests 1-10)
 
 Tests:
 1. "What is Redis?" with an empty library — must produce a useful general answer.

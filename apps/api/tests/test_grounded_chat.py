@@ -1,6 +1,5 @@
 """
 MediaCompile — Phase 6: Grounded AI Chat (RAG) & Citations Test Suite.
-Source of Truth: MediaCompile-prompt.md (Section 16: Grounded AI Chat Tasks & Gates)
 
 Validates:
 1. Grounded answers cite relevant fixture content with [Source N] references.

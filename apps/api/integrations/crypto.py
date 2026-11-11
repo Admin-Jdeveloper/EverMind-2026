@@ -1,6 +1,5 @@
 """
 MediaCompile — Integrations Credential Encryption & Token Privacy Service.
-Source of Truth: MediaCompile-prompt.md (Section 18: Phase 8 — Social and External Integrations)
 
 Features:
 1. Symmetrical encryption at rest for third-party OAuth access tokens, refresh tokens, and secrets.

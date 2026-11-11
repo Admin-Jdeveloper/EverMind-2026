@@ -1,6 +1,5 @@
 """
 MediaCompile — Conversational Query Router & Reasoning Classifier.
-Source of Truth: MediaCompile Target Architecture (Groq GPT-OSS 120B as Single Provider)
 
 Principles:
 1. Groq GPT-OSS 120B (openai/gpt-oss-120b) is the sole LLM provider for all completion turns.

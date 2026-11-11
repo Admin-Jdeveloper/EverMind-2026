@@ -88,5 +88,5 @@ npm run lint
 npm run build
 
 # Run Security & Secret Audit Scanner
-.\.venv\Scripts\python.exe execution/scan_secrets_and_deps.py
+.\.venv\Scripts\python.exe execution/scan_secrets_and_deps.py  
 ```
